@@ -1,0 +1,18 @@
+[package]
+name = "fhe_processor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+auto-base-conv = { git = "https://github.com/KAIST-CryptLab/FFT-based-CircuitBootstrap.git", branch = "main" }
+tfhe = { version = "0.5.3", features = ["boolean", "shortint", "x86_64-unix"] }
+rand = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
+aligned-vec = "0.5.0"
+dyn-stack = "0.9"
+thiserror = "1.0"  # For better error handling
+
+[dev-dependencies]
+criterion = { version = "0.4", features = ["html_reports"] }
+concrete-fft = { version = "0.4.0", features = ["serde"] }
+
