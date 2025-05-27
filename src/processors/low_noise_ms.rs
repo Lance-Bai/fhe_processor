@@ -1,38 +1,83 @@
-use tfhe::core_crypto::prelude::{Container, ContainerMut, LweCiphertext, UnsignedInteger};
+use tfhe::{
+    boolean::prelude::PolynomialSize,
+    core_crypto::prelude::{
+        CastInto, Container, LutCountLog, LweCiphertext, ModulusSwitchOffset,
+        MonomialDegree, UnsignedTorus,
+    },
+};
 
-pub fn lwe_ciphertext_mod_switch_from_native_to_non_native_power_of_two_with_low_noise<
-    Scalar,
-    InputCont,
-    OutputCont,
->(
-    input: &LweCiphertext<InputCont>,
-    output: &mut LweCiphertext<OutputCont>,
-) where
-    Scalar: UnsignedInteger,
-    InputCont: Container<Element = Scalar>,
-    OutputCont: ContainerMut<Element = Scalar>,
+fn fast_low_noise_pbs_modulus_switch_mask<Scalar: UnsignedTorus + CastInto<usize>>(
+    input: Scalar,
+    poly_size: PolynomialSize,
+    offset: ModulusSwitchOffset,
+    lut_count_log: LutCountLog,
+) -> (usize, Scalar) {
+    // First, do the left shift (we discard the offset msb)
+    let mut output = input << offset.0;
+    // Start doing the right shift
+    output >>= Scalar::BITS - poly_size.log2().0 - 2 + lut_count_log.0;
+    // Do the rounding
+    output += Scalar::ONE;
+    // Finish the right shift
+    output >>= 1;
+    let bias =
+        input - output << (Scalar::BITS - poly_size.log2().0 - 1 + lut_count_log.0 - offset.0);
+    // Apply the lsb padding
+    output <<= lut_count_log.0;
+    (<Scalar as CastInto<usize>>::cast_into(output), bias)
+}
+
+fn fast_low_noise_pbs_modulus_switch_body<Scalar: UnsignedTorus + CastInto<usize>>(
+    input: Scalar,
+    bias: Scalar,
+    poly_size: PolynomialSize,
+    offset: ModulusSwitchOffset,
+    lut_count_log: LutCountLog,
+) -> usize
+where
+    Scalar: UnsignedTorus + CastInto<usize>,
 {
-    assert!(
-        input.ciphertext_modulus().is_native_modulus(),
-        "input ciphertext modulus is not native"
-    );
-    assert!(
-        output.ciphertext_modulus().is_non_native_power_of_two(),
-        "output ciphertext modulus is not non-native power-of-two"
-    );
+    let mut output = input - bias >> 1; // b - mu * bias, mu = 1/2
+    output <<= offset.0;
+    output >>= Scalar::BITS - poly_size.log2().0 - 2 + lut_count_log.0;
+    // Do the rounding
+    output += Scalar::ONE;
+    // Finish the right shift
+    output >>= 1;
+    // Apply the lsb padding
+    output <<= lut_count_log.0;
+    <Scalar as CastInto<usize>>::cast_into(output)
+}
 
-    let output_ciphertext_modulus = output.ciphertext_modulus();
-    let divisor = output_ciphertext_modulus.get_power_of_two_scaling_to_native_torus();
+pub fn fast_low_noise_pbs_modulus_switch<Scalar, InputCont>(
+    input: &LweCiphertext<InputCont>,
+    poly_size: PolynomialSize,
+    offset: ModulusSwitchOffset,
+    lut_count_log: LutCountLog,
+) -> (Vec<MonomialDegree>, MonomialDegree)
+where
+    Scalar: UnsignedTorus + CastInto<usize>,
+    InputCont: Container<Element = Scalar>,
+{
+    let mut bias_acc: Scalar = Scalar::ZERO;
 
-    let (in_mask, in_body) = input.get_mask_and_body();
-    let (mut out_mask, mut out_body) = output.get_mut_mask_and_body();
-    let mut bias: Scalar = Scalar::ZERO;
-    for (src, dst) in in_mask.as_ref().iter().zip(out_mask.as_mut().iter_mut()) {
-        *dst = *src - (*src) % divisor;
-        bias += *src - *dst;
+    let mut mask: Vec<MonomialDegree> =
+        vec![MonomialDegree(0); input.lwe_size().to_lwe_dimension().0];
+
+    for (element, degree) in input.get_mask().as_ref().iter().zip(mask.iter_mut()) {
+        let (output, bias) =
+            fast_low_noise_pbs_modulus_switch_mask(*element, poly_size, offset, lut_count_log);
+        *degree = MonomialDegree(output);
+        bias_acc += bias;
     }
-    //fix the body with bias with b' = b - mu * bias
-    in_body.data.clone_into(&mut out_body.data);
-    let fixed_b = *in_body.data - bias >> 1;
-    *out_body.data = fixed_b - fixed_b % divisor;
+
+    let body = MonomialDegree(fast_low_noise_pbs_modulus_switch_body(
+        *input.get_body().data,
+        bias_acc,
+        poly_size,
+        offset,
+        lut_count_log,
+    ));
+
+    (mask, body)
 }
