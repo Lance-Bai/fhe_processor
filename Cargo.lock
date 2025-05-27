@@ -353,6 +353,8 @@ dependencies = [
  "concrete-fft",
  "criterion",
  "dyn-stack",
+ "itertools 0.14.0",
+ "lazy_static",
  "rand 0.8.5",
  "tfhe 0.5.4",
  "thiserror",
@@ -473,6 +475,15 @@ name = "itertools"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
 dependencies = [
  "either",
 ]
