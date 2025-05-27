@@ -31,6 +31,7 @@ lazy_static! {
         DecompositionLevelCount(4), // cbs_level
         LutCountLog(2), // log_lut_count
         CiphertextModulus::<u64>::new_native(), // ciphertext_modulus
-        6, // message_size
+        4, // message_size
+        4,
     );
 }

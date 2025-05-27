@@ -31,6 +31,7 @@ pub struct ProcessorParam<Scalar: UnsignedInteger> {
     log_lut_count: LutCountLog,
     ciphertext_modulus: CiphertextModulus::<Scalar>,
     message_size: usize,
+    extract_size: usize,
 }
 
 impl<Scalar: UnsignedInteger> ProcessorParam<Scalar> {
@@ -62,6 +63,7 @@ impl<Scalar: UnsignedInteger> ProcessorParam<Scalar> {
         log_lut_count: LutCountLog,
         ciphertext_modulus: CiphertextModulus::<Scalar>,
         message_size: usize,
+        extract_size: usize,
     ) -> Self {
         ProcessorParam {
             lwe_dimension,
@@ -91,6 +93,7 @@ impl<Scalar: UnsignedInteger> ProcessorParam<Scalar> {
             log_lut_count,
             ciphertext_modulus,
             message_size,
+            extract_size,
         }
     }
 
@@ -200,5 +203,9 @@ impl<Scalar: UnsignedInteger> ProcessorParam<Scalar> {
 
     pub fn message_size(&self) -> usize {
         self.message_size
+    }
+
+    pub fn extract_size(&self) -> usize {
+        self.extract_size
     }
 }

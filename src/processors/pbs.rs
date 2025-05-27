@@ -1,6 +1,5 @@
 use aligned_vec::CACHELINE_ALIGN;
 use auto_base_conv::glwe_ciphertext_monic_monomial_div;
-use concrete_fft::c64;
 use dyn_stack::{PodStack, ReborrowMut};
 
 use itertools::izip;
@@ -13,7 +12,7 @@ use tfhe::core_crypto::{
 };
 use crate::utils::tools::polynomial_wrapping_monic_monomial_mul_and_subtract;
 
-pub fn pbs_many_lut_after_ms_before_extract<Scalar, InputCont, OutputCont>(
+pub fn pbs_many_lut_after_ms_before_extract<Scalar, OutputCont>(
     body: &MonomialDegree,
     mask: &Vec<MonomialDegree>,
     glev_out: &mut GlweCiphertextList<OutputCont>,
@@ -25,7 +24,6 @@ pub fn pbs_many_lut_after_ms_before_extract<Scalar, InputCont, OutputCont>(
     ciphertext_modulus: CiphertextModulus<Scalar>,
 ) where
     Scalar: UnsignedTorus + CastInto<usize>,
-    InputCont: Container<Element = c64>,
     OutputCont: ContainerMut<Element = Scalar>,
 {
     assert_eq!(glev_out.glwe_size(), fourier_bsk.glwe_size());
