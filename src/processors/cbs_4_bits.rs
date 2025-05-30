@@ -1,23 +1,15 @@
 use aligned_vec::ABox;
 use auto_base_conv::AutomorphKey;
 use std::collections::HashMap;
-use tfhe::{
-    core_crypto::{
-        fft_impl::fft64::{
-            c64,
-            crypto::{
-                bootstrap::FourierLweBootstrapKeyView,
-                ggsw::{FourierGgswCiphertextListMutView, FourierGgswCiphertextListView},
-            },
-        },
-        prelude::{CiphertextModulus, *},
-    },
-    shortint::prelude::*,
+use tfhe::core_crypto::{
+    fft_impl::fft64::{c64, crypto::bootstrap::FourierLweBootstrapKeyView},
+    prelude::*,
 };
 
 use crate::utils::parms::ProcessorParam;
 
 use super::{
+    convert::convert_to_ggsw_after_blind_rotate_4_bit,
     low_noise_ms::fast_low_noise_pbs_modulus_switch, pbs::pbs_many_lut_after_ms_before_extract,
 };
 
@@ -41,7 +33,7 @@ pub fn circuit_bootstrapping_4_bits_at_once<Scalar, InputCont, OutputCont, Fouri
     let ksk_base_log = parms.ks_base_log();
     let ksk_level = parms.ks_level();
     let glwe_size = parms.glwe_dimension().to_glwe_size();
-    let ciphertext_modulus  = parms.ciphertext_modulus();
+    let ciphertext_modulus = parms.ciphertext_modulus();
     let log_lut_count = parms.log_lut_count();
     let extract_size = parms.extract_size();
 
@@ -56,6 +48,21 @@ pub fn circuit_bootstrapping_4_bits_at_once<Scalar, InputCont, OutputCont, Fouri
         ciphertext_modulus,
     );
 
+    let mut fourier_ggsw_chunk_out = FourierGgswCiphertextList::new(
+        vec![
+            c64::default();
+            extract_size
+                * polynomial_size.to_fourier_polynomial_size().0
+                * glwe_size.0
+                * glwe_size.0
+                * cbs_level.0
+        ],
+        extract_size,
+        glwe_size,
+        polynomial_size,
+        cbs_base_log,
+        cbs_level,
+    );
 
     ///////////////////////////////////////////////////////////////////
     keyswitch_lwe_ciphertext(&ksk, &input, &mut small_lwe);
@@ -78,8 +85,6 @@ pub fn circuit_bootstrapping_4_bits_at_once<Scalar, InputCont, OutputCont, Fouri
         4,
         ciphertext_modulus,
     );
-
-    
 
 
 }
