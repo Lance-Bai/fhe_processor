@@ -1,0 +1,33 @@
+use tfhe::{
+    boolean::prelude::LweDimension,
+    core_crypto::
+        prelude::{
+            Container, LweSecretKey, LweSecretKeyOwned, UnsignedTorus,
+        }
+    ,
+};
+
+pub fn allocate_and_generate_new_reused_lwe_key<Scalar, InputCont>(
+    input_lwe_sk: &LweSecretKey<InputCont>,
+    new_dimension: LweDimension,
+) -> LweSecretKeyOwned<Scalar>
+where
+    Scalar: UnsignedTorus + Copy,
+    InputCont: Container<Element = Scalar>,
+{
+    assert!(
+        new_dimension.0 > input_lwe_sk.lwe_dimension().0,
+        "New LWE dimension must be greater than the input LWE dimension. \
+         New: {:?}, Input: {:?}",
+        new_dimension,
+        input_lwe_sk.lwe_dimension()
+    );
+    let mut lwe_secret_key = LweSecretKeyOwned::new_empty_key(Scalar::ZERO, new_dimension);
+
+    // 拷贝旧key的前new_dimension个元素到新key
+    let src = &input_lwe_sk.as_ref()[..input_lwe_sk.lwe_dimension().0];
+    let dst = &mut lwe_secret_key.as_mut()[..src.len()];
+    dst.copy_from_slice(src);
+
+    lwe_secret_key
+}

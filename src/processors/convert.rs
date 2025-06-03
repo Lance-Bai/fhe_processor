@@ -1,31 +1,29 @@
-use aligned_vec::ABox;
+use aligned_vec::{ABox, ConstAlign};
 use auto_base_conv::{
     automorphism::*, glwe_conv::*, glwe_preprocessing_assign, keyswitch_glwe_ciphertext,
     switch_scheme, utils::*, FourierGlweKeyswitchKey,
 };
 use std::collections::HashMap;
 use tfhe::core_crypto::{
-    fft_impl::fft64::{
-        c64,
-        crypto::ggsw::FourierGgswCiphertextListView,
-    },
+    fft_impl::fft64::
+        c64
+    ,
     prelude::*,
 };
 
-pub fn convert_to_ggsw_after_blind_rotate_4_bit<Scalar, InputCont, OutputCont, KeyCont>(
+pub fn convert_to_ggsw_after_blind_rotate_4_bit<Scalar, InputCont, OutputCont>(
     glev_in: &GlweCiphertextList<InputCont>,
     ggsw_out: &mut GgswCiphertext<OutputCont>,
     bit_idx_from_msb: usize,
-    glwe_ksk_to_large: &FourierGlweKeyswitchKey<KeyCont>,
-    glwe_ksk_from_large: &FourierGlweKeyswitchKey<KeyCont>,
+    glwe_ksk_to_large: &FourierGlweKeyswitchKey<ABox<[c64], ConstAlign<128>>>,
+    glwe_ksk_from_large: &FourierGlweKeyswitchKey<ABox<[c64], ConstAlign<128>>>,
     auto_keys: &HashMap<usize, AutomorphKey<ABox<[c64]>>>,
-    ss_key: FourierGgswCiphertextListView,
+    ss_key: &FourierGgswCiphertextList<ABox<[c64]>>,
     ciphertext_modulus: CiphertextModulus<Scalar>,
 ) where
     Scalar: UnsignedTorus,
     InputCont: Container<Element = Scalar>,
     OutputCont: ContainerMut<Element = Scalar>,
-    KeyCont: Container<Element = c64>,
 {
     assert!(
         bit_idx_from_msb <= 3,
@@ -122,7 +120,7 @@ pub fn convert_to_ggsw_after_blind_rotate_4_bit<Scalar, InputCont, OutputCont, K
         keyswitch_glwe_ciphertext(&glwe_ksk_from_large, &buf_large_glwe, &mut glwe_out);
     }
 
-    switch_scheme(&glev_out, ggsw_out, ss_key);
+    switch_scheme(&glev_out, ggsw_out, ss_key.as_view());
 }
 
 // 辅助函数：提取并调整LWE样本
