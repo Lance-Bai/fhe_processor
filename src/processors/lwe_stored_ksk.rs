@@ -1,9 +1,13 @@
-use ::serde::{Serialize, Deserialize};
+use ::serde::{Deserialize, Serialize};
 use tfhe::{
     boolean::prelude::{DecompositionBaseLog, DecompositionLevelCount, LweDimension},
-    core_crypto::prelude::{
-        CiphertextModulus, Container, ContainerMut, ContiguousEntityContainer, ContiguousEntityContainerMut, CreateFrom, LweCiphertextListCreationMetadata, LweCiphertextListMutView, LweCiphertextListView, LweSecretKey, LweSize, UnsignedInteger, UnsignedTorus
+    core_crypto::{
+        commons::math::decomposition::DecompositionLevel,
+        prelude::{
+            encrypt_lwe_ciphertext_list, ByteRandomGenerator, CastFrom, CastInto, CiphertextModulus, Container, ContainerMut, ContiguousEntityContainer, ContiguousEntityContainerMut, CreateFrom, EncryptionRandomGenerator, LweCiphertextListCreationMetadata, LweCiphertextListMutView, LweCiphertextListView, LweSecretKey, LweSize, PlaintextListOwned, UnsignedInteger, UnsignedTorus
+        },
     },
+    shortint::{parameters::DispersionParameter, wopbs::PlaintextCount},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -121,8 +125,6 @@ impl<Scalar: UnsignedInteger, C: Container<Element = Scalar>> LweStoredReusedKey
     pub fn input_lwe_size(&self) -> LweSize {
         self.input_lwe_size
     }
-
-
 
     /// Return a view of the [`LweStoredReusedKeyswitchKey`]. This is useful if an algorithm takes a view by
     /// value.
@@ -326,4 +328,155 @@ pub fn lwe_keyswitch_key_input_key_element_encrypted_size(
 ) -> usize {
     // One ciphertext per level encrypted under the output key
     decomp_level_count.0 * output_lwe_size.0 * (1 << decomp_base_log.0)
+}
+////////////////////////////////////////////////////////////////////////
+/// key generation part
+pub fn generate_lwe_stored_reused_keyswitch_key<
+    Scalar,
+    InputKeyCont,
+    OutputKeyCont,
+    KSKeyCont,
+    Gen,
+>(
+    input_lwe_sk: &LweSecretKey<InputKeyCont>,
+    output_lwe_sk: &LweSecretKey<OutputKeyCont>,
+    lwe_keyswitch_key: &mut LweStoredReusedKeyswitchKey<KSKeyCont>,
+    noise_parameters: impl DispersionParameter,
+    generator: &mut EncryptionRandomGenerator<Gen>,
+) where
+    Scalar: UnsignedTorus + CastInto<usize> + CastFrom<usize>,
+    InputKeyCont: Container<Element = Scalar>,
+    OutputKeyCont: Container<Element = Scalar>,
+    KSKeyCont: ContainerMut<Element = Scalar>,
+    Gen: ByteRandomGenerator,
+{
+    assert!(
+        lwe_keyswitch_key.input_key_lwe_dimension() == input_lwe_sk.lwe_dimension(),
+        "The destination LweKeyswitchKey input LweDimension is not equal \
+    to the input LweSecretKey LweDimension. Destination: {:?}, input: {:?}",
+        lwe_keyswitch_key.input_key_lwe_dimension(),
+        input_lwe_sk.lwe_dimension()
+    );
+    assert!(
+        lwe_keyswitch_key.output_key_lwe_dimension() == output_lwe_sk.lwe_dimension(),
+        "The destination LweKeyswitchKey output LweDimension is not equal \
+    to the output LweSecretKey LweDimension. Destination: {:?}, output: {:?}",
+        lwe_keyswitch_key.output_key_lwe_dimension(),
+        output_lwe_sk.lwe_dimension()
+    );
+    let n = output_lwe_sk.lwe_dimension().0;
+    for (input_key_element, output_key_element) in input_lwe_sk
+        .as_ref()
+        .iter()
+        .zip(output_lwe_sk.as_ref().iter())
+        .take(n)
+    {
+        assert!(
+            input_key_element.eq(output_key_element),
+            "The input key element is not compatible with the output key element, not a reused key. \
+    Input: {:?}, output: {:?}",
+            input_key_element,
+            output_key_element
+        );
+    }
+
+    let decomp_base_log = lwe_keyswitch_key.decomposition_base_log();
+    let decomp_base = 1 << decomp_base_log.0;
+    let decomp_level_count = lwe_keyswitch_key.decomposition_level_count();
+    let ciphertext_modulus = lwe_keyswitch_key.ciphertext_modulus();
+    assert!(ciphertext_modulus.is_compatible_with_native_modulus());
+
+    // The plaintexts used to encrypt a key element will be stored in this buffer
+    let mut decomposition_plaintexts_buffer = PlaintextListOwned::new(
+        Scalar::ZERO,
+        PlaintextCount(decomp_level_count.0 * 1 << decomp_base_log.0),
+    );
+
+    let base_half = (decomp_base as i64) / 2;
+
+    for (input_key_element, mut keyswitch_key_block) in input_lwe_sk
+        .as_ref()
+        .iter()
+        .zip(lwe_keyswitch_key.iter_mut())
+    {
+        // 填充 decomposition_plaintexts_buffer
+        for level_idx in 0..decomp_level_count.0 {
+            let level = DecompositionLevel(decomp_level_count.0 - level_idx); // level = {l, l-1, ..., 1}
+            for t in -base_half..base_half {
+                // t = {-B/2, ..., -1, 0, 1, ..., B/2 - 1}
+                let buffer_idx = level_idx * decomp_base + (t + base_half) as usize;
+                let mut tt: Scalar = int_to_scalar(t);
+                tt *= *input_key_element;
+                let shift = Scalar::BITS - decomp_base_log.0 * level.0;
+                tt.shl_assign(shift);
+                decomposition_plaintexts_buffer.as_mut()[buffer_idx] =
+                    tt.wrapping_div(ciphertext_modulus.get_power_of_two_scaling_to_native_torus());
+            }
+        }
+
+        encrypt_lwe_ciphertext_list(
+            output_lwe_sk,
+            &mut keyswitch_key_block,
+            &decomposition_plaintexts_buffer,
+            noise_parameters,
+            generator,
+        );
+    }
+    //原始计算流程
+    // *message.0 = DecompositionTerm::new(level, decomp_base_log, *input_key_element)
+    //     .to_recomposition_summand()
+    //     .wrapping_div(ciphertext_modulus.get_power_of_two_scaling_to_native_torus());
+}
+
+/// Allocate a new [`LWE stored reused version keyswitch key`](`LweStoredReusedKeyswitchKey`) and fill it with an actual keyswitching
+/// key constructed from an input and an output key [`LWE secret key`](`LweSecretKey`).
+///
+/// See [`keyswitch_lwe_ciphertext`] for usage.
+pub fn allocate_and_generate_new_stored_reused_lwe_keyswitch_key<
+    Scalar,
+    InputKeyCont,
+    OutputKeyCont,
+    Gen,
+>(
+    input_lwe_sk: &LweSecretKey<InputKeyCont>,
+    output_lwe_sk: &LweSecretKey<OutputKeyCont>,
+    decomp_base_log: DecompositionBaseLog,
+    decomp_level_count: DecompositionLevelCount,
+    noise_parameters: impl DispersionParameter,
+    ciphertext_modulus: CiphertextModulus<Scalar>,
+    generator: &mut EncryptionRandomGenerator<Gen>,
+) -> LweStoredReusedKeyswitchKeyOwned<Scalar>
+where
+    Scalar: UnsignedTorus + CastFrom<usize> + CastInto<usize>,
+    InputKeyCont: Container<Element = Scalar>,
+    OutputKeyCont: Container<Element = Scalar>,
+    Gen: ByteRandomGenerator,
+{
+    let mut new_lwe_keyswitch_key = LweStoredReusedKeyswitchKeyOwned::new(
+        Scalar::ZERO,
+        decomp_base_log,
+        decomp_level_count,
+        input_lwe_sk.lwe_dimension(),
+        output_lwe_sk.lwe_dimension(),
+        ciphertext_modulus,
+    );
+
+    generate_lwe_stored_reused_keyswitch_key(
+        input_lwe_sk,
+        output_lwe_sk,
+        &mut new_lwe_keyswitch_key,
+        noise_parameters,
+        generator,
+    );
+
+    new_lwe_keyswitch_key
+}
+
+#[inline]
+fn int_to_scalar<Scalar: UnsignedTorus + CastFrom<usize>>(t: i64) -> Scalar {
+    if t >= 0 {
+        Scalar::cast_from(t as usize)
+    } else {
+        Scalar::cast_from((-t) as usize).wrapping_neg()
+    }
 }
