@@ -16,8 +16,8 @@ where
     InputCont: Container<Element = Scalar>,
 {
     assert!(
-        new_dimension.0 > input_lwe_sk.lwe_dimension().0,
-        "New LWE dimension must be greater than the input LWE dimension. \
+        new_dimension.0 <= input_lwe_sk.lwe_dimension().0,
+        "New LWE dimension must be less than the input LWE dimension. \
          New: {:?}, Input: {:?}",
         new_dimension,
         input_lwe_sk.lwe_dimension()
@@ -25,8 +25,8 @@ where
     let mut lwe_secret_key = LweSecretKeyOwned::new_empty_key(Scalar::ZERO, new_dimension);
 
     // 拷贝旧key的前new_dimension个元素到新key
-    let src = &input_lwe_sk.as_ref()[..input_lwe_sk.lwe_dimension().0];
-    let dst = &mut lwe_secret_key.as_mut()[..src.len()];
+    let src = &input_lwe_sk.as_ref()[..new_dimension.0];
+    let dst = &mut lwe_secret_key.as_mut()[..new_dimension.0];
     dst.copy_from_slice(src);
 
     lwe_secret_key

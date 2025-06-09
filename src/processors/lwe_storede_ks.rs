@@ -1,129 +1,191 @@
 use tfhe::{
     boolean::prelude::{DecompositionBaseLog, DecompositionLevelCount, LweDimension},
     core_crypto::{
-        commons::math::decomposition::{DecompositionLevel, DecompositionTerm},
+        commons::math::decomposition::{self, DecompositionLevel, DecompositionTerm},
         prelude::{
             allocate_and_encrypt_new_lwe_ciphertext,
-            allocate_and_generate_new_binary_lwe_secret_key, ByteRandomGenerator,
-            CiphertextModulus, Container, ContainerMut, ContiguousEntityContainerMut,
+            allocate_and_generate_new_binary_lwe_secret_key, lwe_ciphertext_add_assign,
+            lwe_ciphertext_sub_assign, ByteRandomGenerator, CastFrom, CastInto, CiphertextModulus,
+            Container, ContainerMut, ContiguousEntityContainer, ContiguousEntityContainerMut,
             EncryptionRandomGenerator, LweCiphertext, LweKeyswitchKey, LweKeyswitchKeyOwned,
-            LweSecretKey, LweSecretKeyOwned, Plaintext, PlaintextListOwned, UnsignedTorus,
+            LweSecretKey, LweSecretKeyOwned, Plaintext, PlaintextListOwned, SignedDecomposer,
+            UnsignedInteger, UnsignedTorus,
         },
     },
     shortint::{parameters::DispersionParameter, wopbs::PlaintextCount},
 };
 
+use super::lwe_stored_ksk::LweStoredReusedKeyswitchKey;
 
-
-pub fn allocate_and_generate_new_stored_reused_lwe_keyswitch_key<
-    Scalar,
-    InputKeyCont,
-    OutputKeyCont,
-    Gen,
->(
-    input_lwe_sk: &LweSecretKey<InputKeyCont>,
-    output_lwe_sk: &LweSecretKey<OutputKeyCont>,
-    decomp_base_log: DecompositionBaseLog,
-    decomp_level_count: DecompositionLevelCount,
-    noise_parameters: impl DispersionParameter,
-    ciphertext_modulus: CiphertextModulus<Scalar>,
-    generator: &mut EncryptionRandomGenerator<Gen>,
-) -> LweKeyswitchKeyOwned<Scalar>
-where
-    Scalar: UnsignedTorus,
-    InputKeyCont: Container<Element = Scalar>,
-    OutputKeyCont: Container<Element = Scalar>,
-    Gen: ByteRandomGenerator,
-{
-    let mut new_lwe_keyswitch_key = LweKeyswitchKeyOwned::new(
-        Scalar::ZERO,
-        decomp_base_log,
-        decomp_level_count,
-        input_lwe_sk.lwe_dimension(),
-        output_lwe_sk.lwe_dimension(),
-        ciphertext_modulus,
-    );
-
-    generate_stored_reused_lwe_keyswitch_key(
-        input_lwe_sk,
-        output_lwe_sk,
-        &mut new_lwe_keyswitch_key,
-        noise_parameters,
-        generator,
-    );
-
-    new_lwe_keyswitch_key
-}
-
-pub fn generate_stored_reused_lwe_keyswitch_key<
-    Scalar,
-    InputKeyCont,
-    OutputKeyCont,
-    KSKeyCont,
-    Gen,
->(
-    input_lwe_sk: &LweSecretKey<InputKeyCont>,
-    output_lwe_sk: &LweSecretKey<OutputKeyCont>,
-    lwe_keyswitch_key: &mut LweKeyswitchKey<KSKeyCont>,
-    noise_parameters: impl DispersionParameter,
-    generator: &mut EncryptionRandomGenerator<Gen>,
+pub fn stored_reused_keyswitch_lwe_ciphertext<Scalar, KSKCont, InputCont, OutputCont>(
+    lwe_keyswitch_key: &LweStoredReusedKeyswitchKey<KSKCont>,
+    input_lwe_ciphertext: &LweCiphertext<InputCont>,
+    output_lwe_ciphertext: &mut LweCiphertext<OutputCont>,
 ) where
-    Scalar: UnsignedTorus,
-    InputKeyCont: Container<Element = Scalar>,
-    OutputKeyCont: Container<Element = Scalar>,
-    KSKeyCont: ContainerMut<Element = Scalar>,
-    Gen: ByteRandomGenerator,
+    Scalar: UnsignedInteger + CastInto<usize> + CastFrom<usize>,
+    KSKCont: Container<Element = Scalar>,
+    InputCont: Container<Element = Scalar>,
+    OutputCont: ContainerMut<Element = Scalar>,
 {
     assert!(
-        lwe_keyswitch_key.input_key_lwe_dimension() == input_lwe_sk.lwe_dimension(),
-        "The destination LweKeyswitchKey input LweDimension is not equal \
-    to the input LweSecretKey LweDimension. Destination: {:?}, input: {:?}",
+        lwe_keyswitch_key.input_key_lwe_dimension()
+            == input_lwe_ciphertext.lwe_size().to_lwe_dimension(),
+        "Mismatched input LweDimension. \
+        LweKeyswitchKey input LweDimension: {:?}, input LweCiphertext LweDimension {:?}.",
         lwe_keyswitch_key.input_key_lwe_dimension(),
-        input_lwe_sk.lwe_dimension()
+        input_lwe_ciphertext.lwe_size().to_lwe_dimension(),
     );
     assert!(
-        lwe_keyswitch_key.output_key_lwe_dimension() == output_lwe_sk.lwe_dimension(),
-        "The destination LweKeyswitchKey output LweDimension is not equal \
-    to the output LweSecretKey LweDimension. Destination: {:?}, output: {:?}",
+        lwe_keyswitch_key.output_key_lwe_dimension()
+            == output_lwe_ciphertext.lwe_size().to_lwe_dimension(),
+        "Mismatched output LweDimension. \
+        LweKeyswitchKey output LweDimension: {:?}, output LweCiphertext LweDimension {:?}.",
         lwe_keyswitch_key.output_key_lwe_dimension(),
-        output_lwe_sk.lwe_dimension()
+        output_lwe_ciphertext.lwe_size().to_lwe_dimension(),
+    );
+    assert!(
+        lwe_keyswitch_key.ciphertext_modulus() == input_lwe_ciphertext.ciphertext_modulus(),
+        "Mismatched CiphertextModulus. \
+        LweKeyswitchKey CiphertextModulus: {:?}, input LweCiphertext CiphertextModulus {:?}.",
+        lwe_keyswitch_key.ciphertext_modulus(),
+        input_lwe_ciphertext.ciphertext_modulus()
+    );
+    assert!(
+        lwe_keyswitch_key.ciphertext_modulus() == output_lwe_ciphertext.ciphertext_modulus(),
+        "Mismatched CiphertextModulus. \
+        LweKeyswitchKey CiphertextModulus: {:?}, output LweCiphertext CiphertextModulus {:?}.",
+        lwe_keyswitch_key.ciphertext_modulus(),
+        output_lwe_ciphertext.ciphertext_modulus()
+    );
+    assert!(
+        lwe_keyswitch_key
+            .ciphertext_modulus()
+            .is_compatible_with_native_modulus(),
+        "This operation currently only supports power of 2 moduli"
     );
 
-    let decomp_base_log = lwe_keyswitch_key.decomposition_base_log();
-    let decomp_level_count = lwe_keyswitch_key.decomposition_level_count();
-    let ciphertext_modulus = lwe_keyswitch_key.ciphertext_modulus();
-    assert!(ciphertext_modulus.is_compatible_with_native_modulus());
+    // Fill the output ciphertext with zero
+    output_lwe_ciphertext.as_mut().fill(Scalar::ZERO);
 
-    // The plaintexts used to encrypt a key element will be stored in this buffer
-    let mut decomposition_plaintexts_buffer =
-        PlaintextListOwned::new(Scalar::ZERO, PlaintextCount(decomp_level_count.0));
+    // Copy the input body to the output ciphertext
+    *output_lwe_ciphertext.get_mut_body().data = *input_lwe_ciphertext.get_body().data;
 
-    // Iterate over the input key elements and the destination lwe_keyswitch_key memory
-    for (input_key_element, mut keyswitch_key_block) in input_lwe_sk
+    //Copy the input mask to the output ciphertext for the first lwe_size elements
+    for (src, dst) in input_lwe_ciphertext
         .as_ref()
         .iter()
-        .zip(lwe_keyswitch_key.iter_mut())
+        .zip(output_lwe_ciphertext.get_mut_mask().as_mut().iter_mut())
+        .take(lwe_keyswitch_key.output_key_lwe_dimension().0)
     {
-        // We fill the buffer with the powers of the key elements
-        for (level, message) in (1..=decomp_level_count.0)
-            .rev()
-            .map(DecompositionLevel)
-            .zip(decomposition_plaintexts_buffer.iter_mut())
-        {
-            // Here  we take the decomposition term from the native torus, bring it to the torus we
-            // are working with by dividing by the scaling factor and the encryption will take care
-            // of mapping that back to the native torus
-            *message.0 = DecompositionTerm::new(level, decomp_base_log, *input_key_element)
-                .to_recomposition_summand()
-                .wrapping_div(ciphertext_modulus.get_power_of_two_scaling_to_native_torus());
-        }
-
-        encrypt_lwe_ciphertext_list(
-            output_lwe_sk,
-            &mut keyswitch_key_block,
-            &decomposition_plaintexts_buffer,
-            noise_parameters,
-            generator,
-        );
+        *dst = *src;
     }
+
+    let decomposition_base: usize = 1 << lwe_keyswitch_key.decomposition_base_log().0;
+    let decomposition_level: usize = lwe_keyswitch_key.decomposition_level_count().0;
+    let half_base: Scalar = (decomposition_base / 2).cast_into();
+
+    // We instantiate a decomposer
+    // let decomposer = SignedDecomposer::new(
+    //     lwe_keyswitch_key.decomposition_base_log(),
+    //     lwe_keyswitch_key.decomposition_level_count(),
+    // );
+
+    for (keyswitch_key_block, &input_mask_element) in lwe_keyswitch_key.iter().zip(
+        input_lwe_ciphertext
+            .get_mask()
+            .as_ref()
+            .iter()
+            .skip(lwe_keyswitch_key.output_key_lwe_dimension().0),
+    ) {
+        // let decomposition_iter = decomposer.decompose(input_mask_element);
+        // println!(
+        //     "Input mask element: \t{:064b},\nclosest_representable: \t{:064b}",
+        //     input_mask_element,
+        //     decomposer.closest_representable(input_mask_element)
+        // );
+        // Loop over the levels
+        let decomposition_item = decompose_to_vev(
+            input_mask_element,
+            lwe_keyswitch_key.decomposition_base_log().0,
+            lwe_keyswitch_key.decomposition_level_count().0,
+        );
+        // println!(
+        //     "Input mask element: \t{:064b},\nDecomposition: {:?}",
+        //     input_mask_element,
+        //     decomposition_item
+        //         .iter()
+        //         .rev()
+        //         .map(|x| x.into_signed())
+        //         .collect::<Vec<_>>()
+        // );
+        let mut base_idx: usize;
+        // for decomposed in decomposition_iter {
+        for (l_idx, decomposed) in decomposition_item.into_iter().rev().enumerate() {
+            // println!(
+            //     "Decomposed: {:?} -> {:?}",
+            //     decomposed.value().into_signed(),
+            //     decomposed
+            //         .value()
+            //         .wrapping_add((decomposition_base / 2).cast_into())
+            // );
+            base_idx = decomposed
+                .wrapping_add((decomposition_base / 2).cast_into())
+                .cast_into();
+            // if base_idx >= decomposition_base {
+            //     base_idx -=1;
+            // }
+            // base_idx = base_idx % decomposition_base;
+            // base_idx = base_idx - 1;
+
+            // let l_idx = decomposed.level().0 - 1; // {l, l-1, ..., 1} -> {0,1, ..., l-1}
+
+            lwe_ciphertext_sub_assign(
+                output_lwe_ciphertext,
+                &keyswitch_key_block.get(l_idx * decomposition_base + base_idx),
+            );
+        }
+    }
+}
+
+fn my_decompose_one_level<S: UnsignedInteger>(base_log: usize, state: &mut S, mod_b_mask: S) -> S {
+    let res = *state & mod_b_mask;
+    *state >>= base_log;
+    let sign_bit = res >> (base_log - 1);
+    if sign_bit == S::ONE {
+        *state = state.wrapping_add(S::ONE);
+        res.wrapping_sub(S::ONE << base_log)
+    } else {
+        res
+    }
+}
+
+fn decompose_to_vev<Scalar: UnsignedInteger>(
+    input: Scalar,
+    base_log: usize,
+    level_count: usize,
+) -> Vec<Scalar> {
+    let mut state = input;
+    let mod_b_mask = (Scalar::ONE << base_log) - Scalar::ONE;
+    let mut decomposition_terms = Vec::with_capacity(level_count);
+
+    let non_rep_bit_count: usize = Scalar::BITS - level_count * base_log;
+    let shift = non_rep_bit_count - 1;
+    // Move the representable bits + 1 to the LSB, with our example :
+    //       |-----| 64 - (64 - 12 - 1) == 13 bits
+    // 0....0XX...XX
+    state >>= shift;
+    // Add one to do the rounding by adding the half interval
+    state += Scalar::ONE;
+    // Discard the LSB which was the one deciding in which direction we round
+    // -2 == 111...1110, i.e. all bits are 1 except the LSB which is 0 allowing to zero it
+    state &= Scalar::TWO.wrapping_neg();
+    // Shift right to remove the last bit
+    state >>= 1;
+
+    for _ in 0..level_count {
+        let value = my_decompose_one_level(base_log, &mut state, mod_b_mask);
+        decomposition_terms.push(value);
+    }
+
+    decomposition_terms
 }

@@ -4,7 +4,11 @@ use tfhe::{
     core_crypto::{
         commons::math::decomposition::DecompositionLevel,
         prelude::{
-            encrypt_lwe_ciphertext_list, ByteRandomGenerator, CastFrom, CastInto, CiphertextModulus, Container, ContainerMut, ContiguousEntityContainer, ContiguousEntityContainerMut, CreateFrom, EncryptionRandomGenerator, LweCiphertextListCreationMetadata, LweCiphertextListMutView, LweCiphertextListView, LweSecretKey, LweSize, PlaintextListOwned, UnsignedInteger, UnsignedTorus
+            encrypt_lwe_ciphertext_list, ByteRandomGenerator, CastFrom, CastInto,
+            CiphertextModulus, Container, ContainerMut, ContiguousEntityContainer,
+            ContiguousEntityContainerMut, CreateFrom, EncryptionRandomGenerator,
+            LweCiphertextListCreationMetadata, LweCiphertextListMutView, LweCiphertextListView,
+            LweSecretKey, LweSize, PlaintextListOwned, UnsignedInteger, UnsignedTorus,
         },
     },
     shortint::{parameters::DispersionParameter, wopbs::PlaintextCount},
@@ -103,7 +107,7 @@ impl<Scalar: UnsignedInteger, C: Container<Element = Scalar>> LweStoredReusedKey
     ///
     /// See [`LweStoredReusedKeyswitchKey::from_container`] for usage.
     pub fn input_key_lwe_dimension(&self) -> LweDimension {
-        LweDimension(self.data.container_len() / self.input_key_element_encrypted_size())
+        self.input_lwe_size.to_lwe_dimension()
     }
 
     /// Return the output [`LweDimension`] of the [`LweStoredReusedKeyswitchKey`].
@@ -124,6 +128,12 @@ impl<Scalar: UnsignedInteger, C: Container<Element = Scalar>> LweStoredReusedKey
     /// See [`LweStoredReusedKeyswitchKey::from_container`] for usage.
     pub fn input_lwe_size(&self) -> LweSize {
         self.input_lwe_size
+    }
+
+    /// Return the difference in [`LweSize`] between the input and output [`LweStoredReusedKeyswitchKey`].
+    /// /// See [`LweStoredReusedKeyswitchKey::from_container`] for usage.
+    pub fn lwe_size_diff(&self) -> usize {
+        self.lwe_size_diff
     }
 
     /// Return a view of the [`LweStoredReusedKeyswitchKey`]. This is useful if an algorithm takes a view by
@@ -327,7 +337,7 @@ pub fn lwe_keyswitch_key_input_key_element_encrypted_size(
     output_lwe_size: LweSize,
 ) -> usize {
     // One ciphertext per level encrypted under the output key
-    decomp_level_count.0 * output_lwe_size.0 * (1 << decomp_base_log.0)
+    output_lwe_size.0 * decomp_level_count.0 * (1 << decomp_base_log.0)
 }
 ////////////////////////////////////////////////////////////////////////
 /// key generation part
@@ -393,10 +403,12 @@ pub fn generate_lwe_stored_reused_keyswitch_key<
     );
 
     let base_half = (decomp_base as i64) / 2;
+    let mut shift = 0;
 
     for (input_key_element, mut keyswitch_key_block) in input_lwe_sk
         .as_ref()
         .iter()
+        .skip(n)
         .zip(lwe_keyswitch_key.iter_mut())
     {
         // 填充 decomposition_plaintexts_buffer
@@ -406,11 +418,35 @@ pub fn generate_lwe_stored_reused_keyswitch_key<
                 // t = {-B/2, ..., -1, 0, 1, ..., B/2 - 1}
                 let buffer_idx = level_idx * decomp_base + (t + base_half) as usize;
                 let mut tt: Scalar = int_to_scalar(t);
+                // #[cfg(test)]
+                // {
+                //     println!("\ntt: {} -> {:0width$b}", tt, tt, width = Scalar::BITS);
+                // }
                 tt *= *input_key_element;
-                let shift = Scalar::BITS - decomp_base_log.0 * level.0;
+                // #[cfg(test)]
+                // {
+                //     println!(
+                //         "tt * s({}): -> {:0width$b}",
+                //         *input_key_element,
+                //         tt,
+                //         width = Scalar::BITS
+                //     );
+                // }
+                shift = Scalar::BITS - (decomp_base_log.0 * (level_idx+1));
                 tt.shl_assign(shift);
-                decomposition_plaintexts_buffer.as_mut()[buffer_idx] =
-                    tt.wrapping_div(ciphertext_modulus.get_power_of_two_scaling_to_native_torus());
+                // #[cfg(test)]
+                // {
+                //     println!(
+                //         "tt * s << {}: {} -> {:0width$b}",
+                //         shift,
+                //         tt,
+                //         tt,
+                //         width = Scalar::BITS
+                //     );
+                // }
+                // decomposition_plaintexts_buffer.as_mut()[buffer_idx] =
+                //     tt.wrapping_div(ciphertext_modulus.get_power_of_two_scaling_to_native_torus());
+                decomposition_plaintexts_buffer.as_mut()[buffer_idx] = tt;
             }
         }
 
@@ -421,6 +457,25 @@ pub fn generate_lwe_stored_reused_keyswitch_key<
             noise_parameters,
             generator,
         );
+
+        // #[cfg(test)]
+        // {
+        //     let lwe_size = output_lwe_sk.as_view().lwe_dimension().to_lwe_size().0;
+        //     for (i, e) in keyswitch_key_block.as_ref().into_iter().enumerate() {
+        //         if i % lwe_size == 0 {
+        //             if i != 0 {
+        //                 println!();
+        //             }
+        //             print!(
+        //                 "level {}, t {}: ",
+        //                 i / lwe_size / decomp_base,
+        //                 i / lwe_size % decomp_base
+        //             );
+        //         }
+        //         print!("{} ", e);
+        //     }
+        //     println!();
+        // }
     }
     //原始计算流程
     // *message.0 = DecompositionTerm::new(level, decomp_base_log, *input_key_element)
