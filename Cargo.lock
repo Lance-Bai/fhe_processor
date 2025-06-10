@@ -356,6 +356,7 @@ dependencies = [
  "itertools 0.14.0",
  "lazy_static",
  "rand 0.8.5",
+ "rayon",
  "serde",
  "tfhe 0.5.4",
  "thiserror",

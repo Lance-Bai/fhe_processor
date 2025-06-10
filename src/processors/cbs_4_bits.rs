@@ -6,20 +6,25 @@ use tfhe::core_crypto::{
     prelude::*,
 };
 
-use crate::utils::parms::ProcessorParam;
+use crate::{processors::{lwe_stored_ksk::LweStoredReusedKeyswitchKey, lwe_storede_ks::stored_reused_keyswitch_lwe_ciphertext}, utils::parms::ProcessorParam};
 
 use super::{
     convert::convert_to_ggsw_after_blind_rotate_4_bit,
     low_noise_ms::fast_low_noise_pbs_modulus_switch, pbs::pbs_many_lut_after_ms_before_extract,
 };
 
+use tfhe::core_crypto::fft_impl::fft64::crypto::{
+            
+            ggsw::FourierGgswCiphertextListView,
+        };
+
 pub fn circuit_bootstrapping_4_bits_at_once<Scalar, InputCont>(
     input: &LweCiphertext<InputCont>,
-    output: &mut FourierGgswCiphertextList<ABox<[c64], ConstAlign<128>>>,
+    output: &mut FourierGgswCiphertextList<Vec<c64>>,
     fourier_bsk: FourierLweBootstrapKeyView<'_>,
     auto_keys: &HashMap<usize, AutomorphKey<ABox<[c64]>>>,
-    ss_key: &FourierGgswCiphertextList<ABox<[c64]>>,
-    ksk: LweKeyswitchKey<Vec<Scalar>>,
+    ss_key: FourierGgswCiphertextListView,
+    ksk: LweStoredReusedKeyswitchKey<Vec<Scalar>>,
     fourier_glwe_ksk_to_large: FourierGlweKeyswitchKey<ABox<[c64], ConstAlign<128>>>,
     fourier_glwe_ksk_from_large: FourierGlweKeyswitchKey<ABox<[c64], ConstAlign<128>>>,
     parms: &ProcessorParam<Scalar>,
@@ -58,7 +63,7 @@ where
         ciphertext_modulus,
     );
     ///////////////////////////////////////////////////////////////////
-    keyswitch_lwe_ciphertext(&ksk, &input, &mut small_lwe);
+    stored_reused_keyswitch_lwe_ciphertext(&ksk, &input, &mut small_lwe);
 
     let (mask, body) = fast_low_noise_pbs_modulus_switch(
         &small_lwe,

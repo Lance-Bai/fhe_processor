@@ -1,8 +1,8 @@
 use tfhe::{
     boolean::prelude::PolynomialSize,
     core_crypto::prelude::{
-        CastInto, Container, LutCountLog, LweCiphertext, ModulusSwitchOffset,
-        MonomialDegree, UnsignedTorus,
+        CastInto, Container, LutCountLog, LweCiphertext, ModulusSwitchOffset, MonomialDegree,
+        UnsignedTorus,
     },
 };
 
@@ -37,7 +37,7 @@ fn fast_low_noise_pbs_modulus_switch_body<Scalar: UnsignedTorus + CastInto<usize
 where
     Scalar: UnsignedTorus + CastInto<usize>,
 {
-    let mut output = input - bias >> 1; // b - mu * bias, mu = 1/2
+    let mut output = input.wrapping_sub(bias >> 1); // b - mu * bias, mu = 1/2
     output <<= offset.0;
     output >>= Scalar::BITS - poly_size.log2().0 - 2 + lut_count_log.0;
     // Do the rounding
@@ -68,7 +68,8 @@ where
         let (output, bias) =
             fast_low_noise_pbs_modulus_switch_mask(*element, poly_size, offset, lut_count_log);
         *degree = MonomialDegree(output);
-        bias_acc += bias;
+        bias_acc = bias_acc.wrapping_add(bias);
+        //bias_acc += bias;
     }
 
     let body = MonomialDegree(fast_low_noise_pbs_modulus_switch_body(

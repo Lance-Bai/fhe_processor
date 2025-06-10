@@ -19,4 +19,4 @@ serde = { version = "1.0", features = ["derive"] }
 [dev-dependencies]
 criterion = { version = "0.4", features = ["html_reports"] }
 concrete-fft = { version = "0.4.0", features = ["serde"] }
-
+rayon = "1"

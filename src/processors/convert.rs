@@ -11,6 +11,9 @@ use tfhe::core_crypto::{
     prelude::*,
 };
 
+use tfhe::core_crypto::fft_impl::fft64::crypto::
+            ggsw::FourierGgswCiphertextListView;
+
 pub fn convert_to_ggsw_after_blind_rotate_4_bit<Scalar, InputCont, OutputCont>(
     glev_in: &GlweCiphertextList<InputCont>,
     ggsw_out: &mut GgswCiphertext<OutputCont>,
@@ -18,7 +21,7 @@ pub fn convert_to_ggsw_after_blind_rotate_4_bit<Scalar, InputCont, OutputCont>(
     glwe_ksk_to_large: &FourierGlweKeyswitchKey<ABox<[c64], ConstAlign<128>>>,
     glwe_ksk_from_large: &FourierGlweKeyswitchKey<ABox<[c64], ConstAlign<128>>>,
     auto_keys: &HashMap<usize, AutomorphKey<ABox<[c64]>>>,
-    ss_key: &FourierGgswCiphertextList<ABox<[c64]>>,
+    ss_key: FourierGgswCiphertextListView,
     ciphertext_modulus: CiphertextModulus<Scalar>,
 ) where
     Scalar: UnsignedTorus,

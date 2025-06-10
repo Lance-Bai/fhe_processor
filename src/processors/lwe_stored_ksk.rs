@@ -1,16 +1,13 @@
 use ::serde::{Deserialize, Serialize};
 use tfhe::{
     boolean::prelude::{DecompositionBaseLog, DecompositionLevelCount, LweDimension},
-    core_crypto::{
-        commons::math::decomposition::DecompositionLevel,
-        prelude::{
+    core_crypto::prelude::{
             encrypt_lwe_ciphertext_list, ByteRandomGenerator, CastFrom, CastInto,
             CiphertextModulus, Container, ContainerMut, ContiguousEntityContainer,
             ContiguousEntityContainerMut, CreateFrom, EncryptionRandomGenerator,
             LweCiphertextListCreationMetadata, LweCiphertextListMutView, LweCiphertextListView,
             LweSecretKey, LweSize, PlaintextListOwned, UnsignedInteger, UnsignedTorus,
         },
-    },
     shortint::{parameters::DispersionParameter, wopbs::PlaintextCount},
 };
 
@@ -403,7 +400,7 @@ pub fn generate_lwe_stored_reused_keyswitch_key<
     );
 
     let base_half = (decomp_base as i64) / 2;
-    let mut shift = 0;
+    let mut shift: usize ;
 
     for (input_key_element, mut keyswitch_key_block) in input_lwe_sk
         .as_ref()
@@ -413,7 +410,6 @@ pub fn generate_lwe_stored_reused_keyswitch_key<
     {
         // 填充 decomposition_plaintexts_buffer
         for level_idx in 0..decomp_level_count.0 {
-            let level = DecompositionLevel(decomp_level_count.0 - level_idx); // level = {l, l-1, ..., 1}
             for t in -base_half..base_half {
                 // t = {-B/2, ..., -1, 0, 1, ..., B/2 - 1}
                 let buffer_idx = level_idx * decomp_base + (t + base_half) as usize;

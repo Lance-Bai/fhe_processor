@@ -1,19 +1,10 @@
-use tfhe::{
-    boolean::prelude::{DecompositionBaseLog, DecompositionLevelCount, LweDimension},
-    core_crypto::{
-        commons::math::decomposition::{self, DecompositionLevel, DecompositionTerm},
+use tfhe::
+    core_crypto::
         prelude::{
-            allocate_and_encrypt_new_lwe_ciphertext,
-            allocate_and_generate_new_binary_lwe_secret_key, lwe_ciphertext_add_assign,
-            lwe_ciphertext_sub_assign, ByteRandomGenerator, CastFrom, CastInto, CiphertextModulus,
-            Container, ContainerMut, ContiguousEntityContainer, ContiguousEntityContainerMut,
-            EncryptionRandomGenerator, LweCiphertext, LweKeyswitchKey, LweKeyswitchKeyOwned,
-            LweSecretKey, LweSecretKeyOwned, Plaintext, PlaintextListOwned, SignedDecomposer,
-            UnsignedInteger, UnsignedTorus,
-        },
-    },
-    shortint::{parameters::DispersionParameter, wopbs::PlaintextCount},
-};
+            lwe_ciphertext_sub_assign, CastFrom, CastInto, Container, ContainerMut, ContiguousEntityContainer, LweCiphertext, UnsignedInteger,
+        }
+    
+;
 
 use super::lwe_stored_ksk::LweStoredReusedKeyswitchKey;
 
@@ -81,8 +72,6 @@ pub fn stored_reused_keyswitch_lwe_ciphertext<Scalar, KSKCont, InputCont, Output
     }
 
     let decomposition_base: usize = 1 << lwe_keyswitch_key.decomposition_base_log().0;
-    let decomposition_level: usize = lwe_keyswitch_key.decomposition_level_count().0;
-    let half_base: Scalar = (decomposition_base / 2).cast_into();
 
     // We instantiate a decomposer
     // let decomposer = SignedDecomposer::new(
@@ -97,47 +86,21 @@ pub fn stored_reused_keyswitch_lwe_ciphertext<Scalar, KSKCont, InputCont, Output
             .iter()
             .skip(lwe_keyswitch_key.output_key_lwe_dimension().0),
     ) {
-        // let decomposition_iter = decomposer.decompose(input_mask_element);
-        // println!(
-        //     "Input mask element: \t{:064b},\nclosest_representable: \t{:064b}",
-        //     input_mask_element,
-        //     decomposer.closest_representable(input_mask_element)
-        // );
+
         // Loop over the levels
         let decomposition_item = decompose_to_vev(
             input_mask_element,
             lwe_keyswitch_key.decomposition_base_log().0,
             lwe_keyswitch_key.decomposition_level_count().0,
         );
-        // println!(
-        //     "Input mask element: \t{:064b},\nDecomposition: {:?}",
-        //     input_mask_element,
-        //     decomposition_item
-        //         .iter()
-        //         .rev()
-        //         .map(|x| x.into_signed())
-        //         .collect::<Vec<_>>()
-        // );
+
         let mut base_idx: usize;
         // for decomposed in decomposition_iter {
         for (l_idx, decomposed) in decomposition_item.into_iter().rev().enumerate() {
-            // println!(
-            //     "Decomposed: {:?} -> {:?}",
-            //     decomposed.value().into_signed(),
-            //     decomposed
-            //         .value()
-            //         .wrapping_add((decomposition_base / 2).cast_into())
-            // );
+
             base_idx = decomposed
                 .wrapping_add((decomposition_base / 2).cast_into())
                 .cast_into();
-            // if base_idx >= decomposition_base {
-            //     base_idx -=1;
-            // }
-            // base_idx = base_idx % decomposition_base;
-            // base_idx = base_idx - 1;
-
-            // let l_idx = decomposed.level().0 - 1; // {l, l-1, ..., 1} -> {0,1, ..., l-1}
 
             lwe_ciphertext_sub_assign(
                 output_lwe_ciphertext,
