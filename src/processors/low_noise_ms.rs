@@ -1,8 +1,8 @@
 use tfhe::{
     boolean::prelude::PolynomialSize,
     core_crypto::prelude::{
-        CastInto, Container, LutCountLog, LweCiphertext, ModulusSwitchOffset, MonomialDegree,
-        UnsignedTorus,
+        CastFrom, CastInto, Container, LutCountLog, LweCiphertext, ModulusSwitchOffset,
+        MonomialDegree, UnsignedTorus,
     },
 };
 
@@ -20,8 +20,9 @@ fn fast_low_noise_pbs_modulus_switch_mask<Scalar: UnsignedTorus + CastInto<usize
     output += Scalar::ONE;
     // Finish the right shift
     output >>= 1;
-    let bias =
-        input - output << (Scalar::BITS - poly_size.log2().0 - 1 + lut_count_log.0 - offset.0);
+    let bias = input.wrapping_sub(
+        output << (Scalar::BITS - poly_size.log2().0 - 1 + lut_count_log.0 - offset.0),
+    );
     // Apply the lsb padding
     output <<= lut_count_log.0;
     (<Scalar as CastInto<usize>>::cast_into(output), bias)
@@ -35,9 +36,10 @@ fn fast_low_noise_pbs_modulus_switch_body<Scalar: UnsignedTorus + CastInto<usize
     lut_count_log: LutCountLog,
 ) -> usize
 where
-    Scalar: UnsignedTorus + CastInto<usize>,
+    Scalar: UnsignedTorus + CastInto<usize> + CastFrom<usize>,
 {
-    let mut output = input.wrapping_sub(bias >> 1); // b - mu * bias, mu = 1/2
+    let mut output = input.wrapping_sub(signed_div2(bias)); // b - mu * bias, mu = 1/2
+    // println!("sub is : {:064b}", output);
     output <<= offset.0;
     output >>= Scalar::BITS - poly_size.log2().0 - 2 + lut_count_log.0;
     // Do the rounding
@@ -56,7 +58,7 @@ pub fn fast_low_noise_pbs_modulus_switch<Scalar, InputCont>(
     lut_count_log: LutCountLog,
 ) -> (Vec<MonomialDegree>, MonomialDegree)
 where
-    Scalar: UnsignedTorus + CastInto<usize>,
+    Scalar: UnsignedTorus + CastInto<usize> + CastFrom<usize>,
     InputCont: Container<Element = Scalar>,
 {
     let mut bias_acc: Scalar = Scalar::ZERO;
@@ -67,10 +69,12 @@ where
     for (element, degree) in input.get_mask().as_ref().iter().zip(mask.iter_mut()) {
         let (output, bias) =
             fast_low_noise_pbs_modulus_switch_mask(*element, poly_size, offset, lut_count_log);
+        // println!("bias is : {:064b}", bias);
         *degree = MonomialDegree(output);
         bias_acc = bias_acc.wrapping_add(bias);
         //bias_acc += bias;
     }
+    // println!("bias acc: {:064b}", bias_acc);
 
     let body = MonomialDegree(fast_low_noise_pbs_modulus_switch_body(
         *input.get_body().data,
@@ -81,4 +85,103 @@ where
     ));
 
     (mask, body)
+}
+
+fn signed_div2<T: UnsignedTorus + CastInto<usize> + CastFrom<usize>>(x: T) -> T {
+    let x_unsigned: usize = x.cast_into();
+    let x_signed: i64 = x_unsigned.cast_into();
+    let half = x_signed / 2;
+    let out: usize = half.cast_into();
+    T::cast_from(out)
+}
+
+#[cfg(test)]
+mod mod_switch_test {
+    use tfhe::{
+        boolean::prelude::{LweDimension, PolynomialSize, StandardDev},
+        core_crypto::{
+            fft_impl::common::fast_pbs_modulus_switch,
+            prelude::{
+                allocate_and_encrypt_new_lwe_ciphertext,
+                allocate_and_generate_new_binary_lwe_secret_key, ActivatedRandomGenerator,
+                CastInto, EncryptionRandomGenerator, LutCountLog, ModulusSwitchOffset, Plaintext,
+                SecretRandomGenerator,
+            },
+            seeders::new_seeder,
+        },
+        shortint::{ciphertext, CiphertextModulus},
+    };
+
+    use crate::processors::low_noise_ms::fast_low_noise_pbs_modulus_switch;
+
+    #[test]
+    fn mod_switch_test_trait() {
+        let lwe_dimension = LweDimension(300);
+        let noise = StandardDev(0.0000000000000000000000000000000000000001);
+        let mut boxed_seeder = new_seeder();
+        let seeder = boxed_seeder.as_mut();
+        let ciphertext_modulus = CiphertextModulus::new_native();
+        let poly_size = PolynomialSize(2048);
+        let lut_log_count = LutCountLog(2);
+
+        let mut secret_generator =
+            SecretRandomGenerator::<ActivatedRandomGenerator>::new(seeder.seed());
+        let mut encryption_generator =
+            EncryptionRandomGenerator::<ActivatedRandomGenerator>::new(seeder.seed(), seeder);
+
+        let key = allocate_and_generate_new_binary_lwe_secret_key::<u64, _>(
+            lwe_dimension,
+            &mut secret_generator,
+        );
+        // println!("key is: {:?}", key.clone().into_container());
+
+        let cipher = allocate_and_encrypt_new_lwe_ciphertext(
+            &key,
+            Plaintext(5 << 60),
+            noise,
+            ciphertext_modulus,
+            &mut encryption_generator,
+        );
+
+        // println!("lwe is:\n");
+        // for e in cipher.clone().into_container() {
+        //     println!("{:064b}\n", e)
+        // }
+
+        let (mask, body) = fast_low_noise_pbs_modulus_switch(
+            &cipher,
+            poly_size,
+            ModulusSwitchOffset(0),
+            lut_log_count,
+        );
+        // print!("mask: [");
+        // for (i, m) in mask.iter().enumerate() {
+        //     if i != 0 {
+        //         print!(", ");
+        //     }
+        //     print!("\n{:064b}", m.0);
+        // }
+        // println!("]");
+        println!("our body: {:064b}", body.0);
+        println!(
+            "ori body: {:064b}",
+            fast_pbs_modulus_switch(
+                *cipher.get_body().data,
+                poly_size,
+                ModulusSwitchOffset(0),
+                lut_log_count
+            )
+        );
+        let mut temp = body.0 as u64;
+        for (a, k) in mask.iter().zip(key.into_container().iter()) {
+            temp = temp.wrapping_sub((a.0 as u64) * (*k as u64));
+        }
+        temp = temp % (1 << 12);
+        temp >>= 7;
+        temp += 1;
+        temp >>= 1;
+        println!("result is {:04b}", temp);
+
+        println!("wait")
+    }
 }

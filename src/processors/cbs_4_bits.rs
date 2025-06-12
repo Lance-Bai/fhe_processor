@@ -24,9 +24,9 @@ pub fn circuit_bootstrapping_4_bits_at_once<Scalar, InputCont>(
     fourier_bsk: FourierLweBootstrapKeyView<'_>,
     auto_keys: &HashMap<usize, AutomorphKey<ABox<[c64]>>>,
     ss_key: FourierGgswCiphertextListView,
-    ksk: LweStoredReusedKeyswitchKey<Vec<Scalar>>,
-    fourier_glwe_ksk_to_large: FourierGlweKeyswitchKey<ABox<[c64], ConstAlign<128>>>,
-    fourier_glwe_ksk_from_large: FourierGlweKeyswitchKey<ABox<[c64], ConstAlign<128>>>,
+    ksk: &LweStoredReusedKeyswitchKey<Vec<Scalar>>,
+    fourier_glwe_ksk_to_large: &FourierGlweKeyswitchKey<ABox<[c64], ConstAlign<128>>>,
+    fourier_glwe_ksk_from_large: &FourierGlweKeyswitchKey<ABox<[c64], ConstAlign<128>>>,
     parms: &ProcessorParam<Scalar>,
 )
 where

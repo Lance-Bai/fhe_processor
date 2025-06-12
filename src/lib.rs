@@ -2,10 +2,6 @@ pub mod operations;
 pub mod processors;
 pub mod utils;
 
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
-
 #[cfg(test)]
 mod keyswitch_tests {
     use super::*;
@@ -107,30 +103,26 @@ mod keyswitch_tests {
 
 #[cfg(test)]
 mod circuit_bootstrapping_tests {
-    use super::*;
     use crate::{
         processors::{
-            cbs_4_bits::{self, circuit_bootstrapping_4_bits_at_once},
+            cbs_4_bits::circuit_bootstrapping_4_bits_at_once,
             key_gen::allocate_and_generate_new_reused_lwe_key,
+            low_noise_ms::fast_low_noise_pbs_modulus_switch,
             lwe_stored_ksk::allocate_and_generate_new_stored_reused_lwe_keyswitch_key,
         },
-        utils::instance::Processor_4_bits,
+        utils::instance::{Processor_4_bits, ZeroNoiseTest},
     };
     use auto_base_conv::{
         allocate_and_generate_new_glwe_keyswitch_key,
         convert_standard_glwe_keyswitch_key_to_fourier, gen_all_auto_keys,
-        generate_scheme_switching_key, glwe_ciphertext_clone_from, keygen_pbs,
-        FourierGlweKeyswitchKey,
+        generate_scheme_switching_key, glwe_ciphertext_clone_from,
+        glwe_ciphertext_monic_monomial_div, keygen_pbs, FourierGlweKeyswitchKey,
     };
     use concrete_fft::c64;
-    use rayon::{
-        iter::{IntoParallelIterator, ParallelIterator},
-        range, ThreadPoolBuilder,
-    };
-    use tfhe::core_crypto::prelude::*;
-     #[test]
-    fn cbs_trial(){
-        let param = *Processor_4_bits;
+    use tfhe::core_crypto::{fft_impl::common::fast_pbs_modulus_switch, prelude::*};
+    #[test]
+    fn cbs_trial() {
+        let param = *ZeroNoiseTest;
         let lwe_dimension = param.lwe_dimension();
         let lwe_modular_std_dev = param.lwe_modular_std_dev();
         let polynomial_size = param.polynomial_size();
@@ -173,7 +165,7 @@ mod circuit_bootstrapping_tests {
             EncryptionRandomGenerator::<ActivatedRandomGenerator>::new(seeder.seed(), seeder);
 
         // Generate keys
-        let (lwe_sk, glwe_sk, _, bsk, ksk) = keygen_pbs(
+        let (lwe_sk, glwe_sk, _, bsk, _) = keygen_pbs(
             lwe_dimension,
             glwe_dimension,
             polynomial_size,
@@ -190,15 +182,15 @@ mod circuit_bootstrapping_tests {
 
         let lwe_sk_after_ks = allocate_and_generate_new_reused_lwe_key(&lwe_sk, lwe_dimension);
 
-        let ksk = allocate_and_generate_new_stored_reused_lwe_keyswitch_key(
-            &lwe_sk,
-            &lwe_sk_after_ks,
-            ks_base_log,
-            ks_level,
-            lwe_modular_std_dev,
-            ciphertext_modulus,
-            &mut encryption_generator,
-        );
+        // let ksk = allocate_and_generate_new_stored_reused_lwe_keyswitch_key(
+        //     &lwe_sk,
+        //     &lwe_sk_after_ks,
+        //     ks_base_log,
+        //     ks_level,
+        //     lwe_modular_std_dev,
+        //     ciphertext_modulus,
+        //     &mut encryption_generator,
+        // );
 
         let large_glwe_sk = allocate_and_generate_new_binary_glwe_secret_key(
             large_glwe_dimension,
@@ -269,93 +261,145 @@ mod circuit_bootstrapping_tests {
         );
         let ss_key = ss_key_owned.as_view();
 
-
         // Set input LWE ciphertext
-        let msg = (1 << message_size) - 1;
-        let lwe = allocate_and_encrypt_new_lwe_ciphertext(
-            &lwe_sk,
-            Plaintext(msg << (u64::BITS as usize - message_size)),
-            glwe_modular_std_dev,
-            ciphertext_modulus,
-            &mut encryption_generator,
-        );
+        for msg in 0..16 {
+            let lwe = allocate_and_encrypt_new_lwe_ciphertext(
+                &lwe_sk,
+                Plaintext(msg << (u64::BITS as usize - message_size)),
+                glwe_modular_std_dev,
+                ciphertext_modulus,
+                &mut encryption_generator,
+            );
 
-        let log_scale = u64::BITS as usize - message_size;
-        let acc_plaintext = PlaintextList::from_container(
-            (0..polynomial_size.0)
-                .map(|i| {
-                    if i < (1 << extract_size) {
-                        if (i >> (extract_size - 1)) == 0 {
-                            (i << log_scale) as u64
+            let log_scale = u64::BITS as usize - message_size;
+            let acc_plaintext = PlaintextList::from_container(
+                (0..polynomial_size.0)
+                    .map(|i| {
+                        if i < (1 << extract_size) {
+                            if (i >> (extract_size - 1)) == 0 {
+                                (i << log_scale) as u64
+                            } else {
+                                (((1 << (extract_size - 1)) + ((1 << extract_size) - 1 - i))
+                                    << log_scale) as u64
+                            }
                         } else {
-                            (((1 << (extract_size - 1)) + ((1 << extract_size) - 1 - i))
-                                << log_scale) as u64
+                            u64::ZERO
                         }
-                    } else {
-                        u64::ZERO
-                    }
-                })
-                .collect::<Vec<u64>>(),
-        );
-        let acc_id = allocate_and_trivially_encrypt_new_glwe_ciphertext(
-            glwe_size,
-            &acc_plaintext,
-            ciphertext_modulus,
-        );
+                    })
+                    .collect::<Vec<u64>>(),
+            );
+            let acc_id = allocate_and_trivially_encrypt_new_glwe_ciphertext(
+                glwe_size,
+                &acc_plaintext,
+                ciphertext_modulus,
+            );
 
-        let mut ct_zero =
-            GlweCiphertext::new(u64::ZERO, glwe_size, polynomial_size, ciphertext_modulus);
+            let mut ct_temp =
+                GlweCiphertext::new(u64::ZERO, glwe_size, polynomial_size, ciphertext_modulus);
 
-        // Bench
-        let fft = Fft::new(polynomial_size);
-        let fft = fft.as_view();
-
-        let mut fourier_ggsw_list_out = FourierGgswCiphertextList::new(
-            vec![
-                c64::default();
-                extract_size
-                    * polynomial_size.to_fourier_polynomial_size().0
-                    * glwe_size.0
-                    * glwe_size.0
-                    * cbs_level.0
-            ],
-            extract_size,
-            glwe_size,
-            polynomial_size,
-            cbs_base_log,
-            cbs_level,
-        );
-
-        circuit_bootstrapping_4_bits_at_once(
-            &lwe,
-            &mut fourier_ggsw_list_out,
-            bsk,
-            &auto_keys,
-            ss_key,
-            ksk,
-            fourier_glwe_ksk_to_large,
-            fourier_glwe_ksk_from_large,
-            &param,
-        );
-
-        for (i, fft_gsw) in fourier_ggsw_list_out.as_view().into_ggsw_iter().enumerate() {
             let mut glwe_out =
                 GlweCiphertext::new(u64::ZERO, glwe_size, polynomial_size, ciphertext_modulus);
-            glwe_ciphertext_clone_from(&mut glwe_out, &acc_id);
-            cmux_assign(&mut glwe_out, &mut ct_zero, &fft_gsw);
 
+            glwe_ciphertext_clone_from(&mut glwe_out, &acc_id);
+            let mut fourier_ggsw_list_out = FourierGgswCiphertextList::new(
+                vec![
+                    c64::default();
+                    extract_size
+                        * polynomial_size.to_fourier_polynomial_size().0
+                        * glwe_size.0
+                        * glwe_size.0
+                        * cbs_level.0
+                ],
+                extract_size,
+                glwe_size,
+                polynomial_size,
+                cbs_base_log,
+                cbs_level,
+            );
+
+            ///////////////////////////////////////////////////////////////////
+
+            let mut acc_glev = GlweCiphertextList::new(
+                u64::ZERO,
+                glwe_size,
+                polynomial_size,
+                GlweCiphertextCount(cbs_level.0),
+                ciphertext_modulus,
+            );
+
+            let mut ggsw_list_out = GgswCiphertextList::new(
+                u64::ZERO,
+                glwe_size,
+                polynomial_size,
+                cbs_base_log,
+                cbs_level,
+                GgswCiphertextCount(message_size),
+                ciphertext_modulus,
+            );
+            ///////////////////////////////////////////////////////////////////
+            /// Start the simulation after keyswitching
+            let small_lwe = allocate_and_encrypt_new_lwe_ciphertext(
+                &lwe_sk_after_ks,
+                Plaintext(msg << 60),
+                lwe_modular_std_dev,
+                ciphertext_modulus,
+                &mut encryption_generator,
+            );
+            // test the modulus switching step
+            let (mask, body) = fast_low_noise_pbs_modulus_switch(
+                &small_lwe,
+                polynomial_size,
+                ModulusSwitchOffset(0),
+                log_lut_count,
+            );
+            // print!("our body: {}, mask: [", body.0);
+            // for (i, m) in mask.iter().enumerate() {
+            //     if i != 0 {
+            //         print!(", ");
+            //     }
+            //     print!("{}", m.0);
+            // }
+            // println!("]");
+            // let (lwe_mask, lwe_body) = small_lwe.get_mask_and_body();
+            // print!(
+            //     " their body: {}, mask: [",
+            //     fast_pbs_modulus_switch(
+            //         *lwe_body.data,
+            //         polynomial_size,
+            //         ModulusSwitchOffset(0),
+            //         log_lut_count,
+            //     )
+            // );
+            // for (i, m) in lwe_mask.as_ref().iter().enumerate() {
+            //     if i != 0 {
+            //         print!(", ");
+            //     }
+            //     print!(
+            //         "{}",
+            //         fast_pbs_modulus_switch(
+            //             *m,
+            //             polynomial_size,
+            //             ModulusSwitchOffset(0),
+            //             log_lut_count,
+            //         )
+            //     );
+            // }
+
+            /////////////////////////////////////////////////
+
+            for (i, fft_gsw) in fourier_ggsw_list_out.as_view().into_ggsw_iter().enumerate() {
+                glwe_ciphertext_monic_monomial_div(&mut ct_temp, &glwe_out, MonomialDegree(1 << i));
+                cmux_assign(&mut glwe_out, &mut ct_temp, &fft_gsw);
+            }
             let mut lwe_extract = LweCiphertext::new(u64::ZERO, lwe.lwe_size(), ciphertext_modulus);
             extract_lwe_sample_from_glwe_ciphertext(&glwe_out, &mut lwe_extract, MonomialDegree(0));
-
-            // Decrypt and check
-            let decrypted_plaintext = decrypt_lwe_ciphertext(&lwe_sk, &lwe_extract);
-            let cleartext = decrypted_plaintext.0 >> (u64::BITS as usize - message_size);
+            let plain2 = decrypt_lwe_ciphertext(&lwe_sk, &lwe_extract);
             println!(
-                "Extracted message {}: {:064b}",
-                i,
-                cleartext
+                "Decrypted plaintext: {} -> {:04b}, expected: {}",
+                plain2.0 >> 60,
+                plain2.0 >> 60,
+                msg
             );
         }
-
     }
 }
