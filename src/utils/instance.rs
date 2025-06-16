@@ -37,12 +37,12 @@ lazy_static! {
 
         pub static ref ZeroNoiseTest: ProcessorParam<u64> = ProcessorParam::new(
         LweDimension(873), // lwe_dimension
-        StandardDev(0.000000000000000000000000000000000001), // lwe_modular_std_dev
+        StandardDev(0.00000000000000000000000000000000000000000000001), // lwe_modular_std_dev
         PolynomialSize(2048), // polynomial_size
         GlweDimension(1), // glwe_dimension
         GlweDimension(2), // large_glwe_dimension
-        StandardDev(0.00000000000000000000000000000000000000000000001), // glwe_modular_std_dev
-        StandardDev(0.0000000000000000000000000000000000000000000000001), // large_glwe_modular_std_dev
+        StandardDev(0.00000000000000000000000000000000000000000000000000000001), // glwe_modular_std_dev
+        StandardDev(0.000000000000000000000000000000000000000000000000000000001), // large_glwe_modular_std_dev
         DecompositionBaseLog(11), // pbs_base_log
         DecompositionLevelCount(3), // pbs_level
         DecompositionBaseLog(7), // ks_base_log

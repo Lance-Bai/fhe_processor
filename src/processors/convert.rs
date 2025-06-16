@@ -74,7 +74,7 @@ pub fn convert_to_ggsw_after_blind_rotate_4_bit<Scalar, InputCont, OutputCont>(
         match bit_idx_from_msb {
             0 => {
                 // 直接提取，无需额外计算
-                extract_and_adjust_lwe(&mut buf_lwe, &glwe_in, scale_offset);
+                extract_and_adjust_lwe(&mut buf_lwe, &glwe_in, &scale_offset);
             }
 
             1 => {
@@ -85,6 +85,7 @@ pub fn convert_to_ggsw_after_blind_rotate_4_bit<Scalar, InputCont, OutputCont>(
                     glwe_size,
                     polynomial_size,
                     ciphertext_modulus,
+                    &scale_offset
                 );
             }
 
@@ -96,6 +97,7 @@ pub fn convert_to_ggsw_after_blind_rotate_4_bit<Scalar, InputCont, OutputCont>(
                     glwe_size,
                     polynomial_size,
                     ciphertext_modulus,
+                    &scale_offset
                 );
             }
 
@@ -107,6 +109,7 @@ pub fn convert_to_ggsw_after_blind_rotate_4_bit<Scalar, InputCont, OutputCont>(
                     glwe_size,
                     polynomial_size,
                     ciphertext_modulus,
+                    &scale_offset
                 );
             }
 
@@ -130,13 +133,13 @@ pub fn convert_to_ggsw_after_blind_rotate_4_bit<Scalar, InputCont, OutputCont>(
 fn extract_and_adjust_lwe<Scalar, Cont>(
     buf_lwe: &mut LweCiphertext<Vec<Scalar>>,
     glwe_source: &GlweCiphertext<Cont>,
-    scale_offset: Plaintext<Scalar>,
+    scale_offset: &Plaintext<Scalar>,
 ) where
     Scalar: UnsignedTorus,
     Cont: Container<Element = Scalar>,
 {
     extract_lwe_sample_from_glwe_ciphertext(glwe_source, buf_lwe, MonomialDegree(0));
-    lwe_ciphertext_plaintext_add_assign(buf_lwe, scale_offset);
+    lwe_ciphertext_plaintext_add_assign(buf_lwe, *scale_offset);
 }
 
 // 辅助函数：处理第二位
@@ -146,6 +149,7 @@ fn process_second_bit<Scalar, InputCont>(
     glwe_size: GlweSize,
     polynomial_size: PolynomialSize,
     ciphertext_modulus: CiphertextModulus<Scalar>,
+    scale_offset: &Plaintext<Scalar>
 ) where
     Scalar: UnsignedTorus,
     InputCont: Container<Element = Scalar>,
@@ -159,7 +163,7 @@ fn process_second_bit<Scalar, InputCont>(
     extract_and_adjust_lwe(
         buf_lwe,
         &glwe_out,
-        Plaintext(Scalar::ONE << (Scalar::BITS - 1)),
+        scale_offset,
     );
 }
 
@@ -170,6 +174,7 @@ fn process_third_bit<Scalar, InputCont>(
     glwe_size: GlweSize,
     polynomial_size: PolynomialSize,
     ciphertext_modulus: CiphertextModulus<Scalar>,
+    scale_offset: &Plaintext<Scalar>
 ) where
     Scalar: UnsignedTorus,
     InputCont: Container<Element = Scalar>,
@@ -194,7 +199,7 @@ fn process_third_bit<Scalar, InputCont>(
     extract_and_adjust_lwe(
         buf_lwe,
         &glwe_out,
-        Plaintext(Scalar::ONE << (Scalar::BITS - 1)),
+        scale_offset,
     );
 }
 
@@ -204,6 +209,7 @@ fn process_fourth_bit<Scalar, InputCont>(
     glwe_size: GlweSize,
     polynomial_size: PolynomialSize,
     ciphertext_modulus: CiphertextModulus<Scalar>,
+    scale_offset: &Plaintext<Scalar>
 ) where
     Scalar: UnsignedTorus,
     InputCont: Container<Element = Scalar>,
@@ -236,6 +242,6 @@ fn process_fourth_bit<Scalar, InputCont>(
     extract_and_adjust_lwe(
         buf_lwe,
         &glwe_out,
-        Plaintext(Scalar::ONE << (Scalar::BITS - 1)),
+        scale_offset,
     );
 }
