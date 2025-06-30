@@ -6,17 +6,20 @@ use tfhe::core_crypto::{
     prelude::*,
 };
 
-use crate::{processors::{lwe_stored_ksk::LweStoredReusedKeyswitchKey, lwe_storede_ks::stored_reused_keyswitch_lwe_ciphertext}, utils::parms::ProcessorParam};
+use crate::{
+    processors::{
+        lwe_stored_ksk::LweStoredReusedKeyswitchKey,
+        lwe_storede_ks::stored_reused_keyswitch_lwe_ciphertext,
+    },
+    utils::parms::ProcessorParam,
+};
 
 use super::{
     convert::convert_to_ggsw_after_blind_rotate_4_bit,
     low_noise_ms::fast_low_noise_pbs_modulus_switch, pbs::pbs_many_lut_after_ms_before_extract,
 };
 
-use tfhe::core_crypto::fft_impl::fft64::crypto::{
-            
-            ggsw::FourierGgswCiphertextListView,
-        };
+use tfhe::core_crypto::fft_impl::fft64::crypto::ggsw::FourierGgswCiphertextListView;
 
 pub fn circuit_bootstrapping_4_bits_at_once<Scalar, InputCont>(
     input: &LweCiphertext<InputCont>,
@@ -28,8 +31,7 @@ pub fn circuit_bootstrapping_4_bits_at_once<Scalar, InputCont>(
     fourier_glwe_ksk_to_large: &FourierGlweKeyswitchKey<ABox<[c64], ConstAlign<128>>>,
     fourier_glwe_ksk_from_large: &FourierGlweKeyswitchKey<ABox<[c64], ConstAlign<128>>>,
     parms: &ProcessorParam<Scalar>,
-)
-where
+) where
     Scalar: UnsignedTorus + CastInto<usize> + CastFrom<usize>,
     InputCont: Container<Element = Scalar>,
 {
@@ -39,7 +41,6 @@ where
     let glwe_size = parms.glwe_dimension().to_glwe_size();
     let ciphertext_modulus = parms.ciphertext_modulus();
     let log_lut_count = parms.log_lut_count();
-    let extract_size = parms.extract_size();
     let message_size = parms.message_size();
 
     ///////////////////////////////////////////////////////////////////
@@ -53,25 +54,33 @@ where
         ciphertext_modulus,
     );
 
-    let mut ggsw_list_out = GgswCiphertextList::new(
-        Scalar::ZERO,
-        glwe_size,
-        polynomial_size,
-        cbs_base_log,
-        cbs_level,
-        GgswCiphertextCount(message_size),
-        ciphertext_modulus,
-    );
+    // let mut ggsw_list_out = GgswCiphertextList::new(
+    //     Scalar::ZERO,
+    //     glwe_size,
+    //     polynomial_size,
+    //     cbs_base_log,
+    //     cbs_level,
+    //     GgswCiphertextCount(message_size),
+    //     ciphertext_modulus,
+    // );
+    // use std::time::Instant;
+
+    // let ks_start = Instant::now();
+
     ///////////////////////////////////////////////////////////////////
     stored_reused_keyswitch_lwe_ciphertext(&ksk, &input, &mut small_lwe);
 
+    // println!("stored reused keyswitch time: {:.3?}", ks_start.elapsed());
+
+    // let ms_start = Instant::now();
     let (mask, body) = fast_low_noise_pbs_modulus_switch(
         &small_lwe,
         parms.polynomial_size(),
         ModulusSwitchOffset(0),
         parms.log_lut_count(),
     );
-
+    // println!("modulus keyswitch time: {:.3?}", ms_start.elapsed());
+    // let pbs_start = Instant::now();
     pbs_many_lut_after_ms_before_extract(
         &body,
         &mask,
@@ -83,24 +92,29 @@ where
         4,
         ciphertext_modulus,
     );
+    // println!("pbs time: {:.3?}", pbs_start.elapsed());
+    // let ss_start = Instant::now();
 
-    for (i, (mut ggsw, mut fourier_ggsw)) in ggsw_list_out
-        .iter_mut()
-        .zip(output.as_mut_view().into_ggsw_iter())
-        .enumerate()
-    {
+    let mut ggsw_temp = GgswCiphertext::new(
+        Scalar::ZERO,
+        glwe_size,
+        polynomial_size,
+        cbs_base_log,
+        cbs_level,
+        ciphertext_modulus,
+    );
+    for (i, mut fourier_ggsw) in output.as_mut_view().into_ggsw_iter().enumerate() {
         convert_to_ggsw_after_blind_rotate_4_bit(
             &acc_glev,
-            &mut ggsw,
-            extract_size - i - 1,
+            &mut ggsw_temp,
+            i,
             &fourier_glwe_ksk_to_large,
             &fourier_glwe_ksk_from_large,
             &auto_keys,
             ss_key,
             ciphertext_modulus,
         );
-        convert_standard_ggsw_ciphertext_to_fourier(&ggsw, &mut fourier_ggsw);
+        convert_standard_ggsw_ciphertext_to_fourier(&ggsw_temp, &mut fourier_ggsw);
     }
-
-    
+    // println!("ss time: {:.3?}", ss_start.elapsed());
 }
