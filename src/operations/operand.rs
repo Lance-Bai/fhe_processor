@@ -1,0 +1,148 @@
+use std::cmp::{max, min};
+use std::ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr};
+use num_traits::{PrimInt, Unsigned, WrappingAdd, WrappingSub, WrappingMul, Zero, One, ToPrimitive};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ArithmeticOp {
+    Add,
+    Sub,
+    Mul,
+    Mulhi,
+    Div,
+    Mod,
+    EQ,
+    GT,
+    LT,
+    GTE,
+    LTE,
+    MXA,
+    MIN,
+    RL,
+    RR,
+    SL,
+    SR,
+    OR,
+    AND,
+    XOR,
+    NAND,
+    NOT,
+}
+
+impl ArithmeticOp {
+    pub fn compute<T>(&self, a: T, b: T) -> T
+    where
+        T: Copy
+            + Ord
+            + WrappingAdd
+            + WrappingSub
+            + WrappingMul
+            + BitAnd<Output = T>
+            + BitOr<Output = T>
+            + BitXor<Output = T>
+            + Not<Output = T>
+            + Shl<u32, Output = T>
+            + Shr<u32, Output = T>
+            + PrimInt
+            + Unsigned
+            + From<u8>,
+        u64: From<T>,
+    {
+        match self {
+            ArithmeticOp::Add => a.wrapping_add(&b),
+            ArithmeticOp::Sub => a.wrapping_sub(&b),
+            ArithmeticOp::Mul => a.wrapping_mul(&b),
+            ArithmeticOp::Mulhi => {
+                let wide: u64 = u64::from(a) * u64::from(b);
+                let bits = std::mem::size_of::<T>() * 8;
+                num_traits::NumCast::from((wide >> bits) as u64).unwrap()
+            }
+            ArithmeticOp::Div => {
+                if a == T::zero() { T::zero() } else { b / a }
+            }
+            ArithmeticOp::Mod => {
+                if a == T::zero() { T::zero() } else { b % a }
+            }
+            ArithmeticOp::EQ => if b == a { T::one() } else { T::zero() },
+            ArithmeticOp::GT => if b > a { T::one() } else { T::zero() },
+            ArithmeticOp::LT => if b < a { T::one() } else { T::zero() },
+            ArithmeticOp::GTE => if b >= a { T::one() } else { T::zero() },
+            ArithmeticOp::LTE => if b <= a { T::one() } else { T::zero() },
+            ArithmeticOp::MXA => max(a, b),
+            ArithmeticOp::MIN => min(a, b),
+            ArithmeticOp::RL => b.rotate_left(a.to_u32().unwrap()),
+            ArithmeticOp::RR => b.rotate_right(a.to_u32().unwrap()),
+            ArithmeticOp::SL => b << (a.to_u32().unwrap() & ((std::mem::size_of::<T>() as u32) * 8 - 1)),
+            ArithmeticOp::SR => b >> (a.to_u32().unwrap() & ((std::mem::size_of::<T>() as u32) * 8 - 1)),
+            ArithmeticOp::OR => b | a,
+            ArithmeticOp::AND => b & a,
+            ArithmeticOp::XOR => b ^ a,
+            ArithmeticOp::NAND => !(b & a),
+            ArithmeticOp::NOT => !b,
+        }
+    }
+
+    /// 输入一个usize和位宽（8、16、32），自动拆成a, b并计算
+    pub fn compute_split(&self, input: usize, bitwidth: usize) -> usize {
+        match bitwidth {
+            8 => {
+                let mask = 0xFF;
+                let a = (input & mask) as u8;
+                let b = ((input >> 8) & mask) as u8;
+                self.compute(a, b) as usize
+            }
+            16 => {
+                let mask = 0xFFFF;
+                let a = (input & mask) as u16;
+                let b = ((input >> 16) & mask) as u16;
+                self.compute(a, b) as usize
+            }
+            32 => {
+                let mask = 0xFFFF_FFFF;
+                let a = (input & mask) as u32;
+                let b = ((input >> 32) & mask) as u32;
+                self.compute(a, b) as usize
+            }
+            _ => panic!("Unsupported bitwidth, only 8, 16, 32 are allowed"),
+        }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_arithmetic_op_compute_split_8bit() {
+        // 输入低8位=0x34，高8位=0x12
+        let input = 0x34u8 as usize | ((0x12u8 as usize) << 8);
+        let op = ArithmeticOp::Add;
+        assert_eq!(op.compute_split(input, 8), 0x34u8.wrapping_add(0x12u8) as usize);
+
+        let op = ArithmeticOp::Mul;
+        assert_eq!(op.compute_split(input, 8), 0x34u8.wrapping_mul(0x12u8) as usize);
+
+        let op = ArithmeticOp::AND;
+        assert_eq!(op.compute_split(input, 8), (0x34u8 & 0x12u8) as usize);
+    }
+
+    #[test]
+    fn test_arithmetic_op_compute_split_16bit() {
+        // 输入低16位=0x3456，高16位=0xABCD
+        let input = 0x3456u16 as usize | ((0xABCDu16 as usize) << 16);
+        let op = ArithmeticOp::Sub;
+        assert_eq!(op.compute_split(input, 16), 0x3456u16.wrapping_sub(0xABCDu16) as usize);
+
+        let op = ArithmeticOp::OR;
+        assert_eq!(op.compute_split(input, 16), (0x3456u16 | 0xABCDu16) as usize);
+    }
+
+    #[test]
+    fn test_arithmetic_op_compute_split_32bit() {
+        // 输入低32位=0x12345678，高32位=0x9ABCDEF0
+        let input = 0x12345678u32 as usize | ((0x9ABCDEF0u32 as usize) << 32);
+        let op = ArithmeticOp::XOR;
+        assert_eq!(op.compute_split(input, 32), (0x12345678u32 ^ 0x9ABCDEF0u32) as usize);
+
+        let op = ArithmeticOp::MIN;
+        assert_eq!(op.compute_split(input, 32), min(0x12345678u32, 0x9ABCDEF0u32) as usize);
+    }
+}

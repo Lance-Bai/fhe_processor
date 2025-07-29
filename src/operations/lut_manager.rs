@@ -1,4 +1,9 @@
-use tfhe::core_crypto::prelude::{CastFrom, UnsignedTorus};
+use std::{
+    cmp::{max, min},
+    ops::{BitAnd, BitOr, BitXor, Shl, Shr},
+};
+
+use tfhe::core_crypto::prelude::{CastFrom, CastInto, UnsignedTorus};
 
 fn decode_special_encoded_byte(encoded: u8) -> u8 {
     // 分离高低nibble
@@ -28,14 +33,7 @@ fn decode_special_encoded_byte(encoded: u8) -> u8 {
     let b7 = l2 ^ l3;
 
     // 组合成原始字节
-    (b0 << 7)
-        | (b1 << 6)
-        | (b2 << 5)
-        | (b3 << 4)
-        | (b4 << 3)
-        | (b5 << 2)
-        | (b6 << 1)
-        | b7
+    (b0 << 7) | (b1 << 6) | (b2 << 5) | (b3 << 4) | (b4 << 3) | (b5 << 2) | (b6 << 1) | b7
 }
 
 pub fn encode_special_byte(input: u8) -> ([u64; 4], [u64; 4]) {
@@ -68,34 +66,128 @@ pub fn encode_special_byte(input: u8) -> ([u64; 4], [u64; 4]) {
 // 定义算术运算类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ArithmeticOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
+    Addi,
+    Subi,
+    Mulli,
+    Mulhi,
+    Divi,
+    Modi,
+    EQi,
+    GTi,
+    LTi,
+    GTEi,
+    LTEi,
+    MXAi,
+    MINi,
+    RLi,
+    RRi,
+    SLi,
+    SRi,
+    ORi,
+    ANDi,
+    XORi,
+    NANDi,
+    NOT,
+    // UDFi,
 }
 
 impl ArithmeticOp {
     fn compute(&self, a: u8, b: u8) -> u8 {
         match self {
-            ArithmeticOp::Add => a.wrapping_add(b),
-            ArithmeticOp::Sub => a.wrapping_sub(b),
-            ArithmeticOp::Mul => a.wrapping_mul(b),
-            ArithmeticOp::Div => {
-                if b == 0 {
+            ArithmeticOp::Addi => a.wrapping_add(b),
+            ArithmeticOp::Subi => a.wrapping_sub(b),
+            ArithmeticOp::Mulli => a.wrapping_mul(b),
+            ArithmeticOp::Mulhi => {
+                let c: u16 = a as u16 * b as u16;
+                c.rotate_right(8).cast_into()
+            }
+            ArithmeticOp::Divi => {
+                if a == 0 {
                     0 // 定义除零结果为0，可根据需要调整
                 } else {
-                    a / b
+                    b / a
                 }
             }
+            ArithmeticOp::Modi => {
+                if a == 0 {
+                    0
+                } else {
+                    b.wrapping_rem(a)
+                }
+            }
+            ArithmeticOp::EQi => {
+                if b == a {
+                    1
+                } else {
+                    0
+                }
+            }
+            ArithmeticOp::GTi => {
+                if b > a {
+                    1
+                } else {
+                    0
+                }
+            }
+            ArithmeticOp::LTi => {
+                if b < a {
+                    1
+                } else {
+                    0
+                }
+            }
+            ArithmeticOp::GTEi => {
+                if b >= a {
+                    1
+                } else {
+                    0
+                }
+            }
+            ArithmeticOp::LTEi => {
+                if b <= a {
+                    1
+                } else {
+                    0
+                }
+            }
+            ArithmeticOp::MXAi => max(a, b),
+            ArithmeticOp::MINi => min(a, b),
+            ArithmeticOp::RLi => b.rotate_left(a.into()),
+            ArithmeticOp::RRi => b.rotate_right(a.into()),
+            ArithmeticOp::SLi => b.shl(a.min(7)),
+            ArithmeticOp::SRi => b.shr(a.min(7)),
+            ArithmeticOp::ORi => b.bitor(a),
+            ArithmeticOp::ANDi => b.bitand(a),
+            ArithmeticOp::XORi => b.bitxor(a),
+            ArithmeticOp::NANDi => b.bitand(a).bitxor(255),
+            ArithmeticOp::NOT => b.bitxor(255),
         }
     }
 
     fn name(&self) -> &'static str {
         match self {
-            ArithmeticOp::Add => "addition",
-            ArithmeticOp::Sub => "subtraction",
-            ArithmeticOp::Mul => "multiplication",
-            ArithmeticOp::Div => "division",
+            ArithmeticOp::Addi => "addition",
+            ArithmeticOp::Subi => "subtraction",
+            ArithmeticOp::Mulli => "multiplication low byte",
+            ArithmeticOp::Mulhi => "multiplication high byte",
+            ArithmeticOp::Divi => "division",
+            ArithmeticOp::Modi => "modulus",
+            ArithmeticOp::EQi => "equal",
+            ArithmeticOp::GTi => "greater than",
+            ArithmeticOp::LTi => "less than",
+            ArithmeticOp::GTEi => "greater than or equal",
+            ArithmeticOp::LTEi => "less than or equal",
+            ArithmeticOp::MXAi => "maximum",
+            ArithmeticOp::MINi => "minimum",
+            ArithmeticOp::RLi => "rotate left",
+            ArithmeticOp::RRi => "rotate right",
+            ArithmeticOp::SLi => "shift left",
+            ArithmeticOp::SRi => "shift right",
+            ArithmeticOp::ORi => "bitwise or",
+            ArithmeticOp::ANDi => "bitwise and",
+            ArithmeticOp::XORi => "bitwise xor",
+            ArithmeticOp::NANDi => "bitwise nand",
+            ArithmeticOp::NOT => "bitwise not",
         }
     }
 }
@@ -309,11 +401,30 @@ fn test_arithmetic_operations() {
     let mut manager = ArithmeticLookupManager::<u64>::new();
 
     // 添加所有运算
+
     manager.add_operations(&[
-        ArithmeticOp::Add,
-        ArithmeticOp::Sub,
-        ArithmeticOp::Mul,
-        ArithmeticOp::Div,
+        ArithmeticOp::Addi,
+        ArithmeticOp::Subi,
+        ArithmeticOp::Mulli,
+        ArithmeticOp::Mulhi,
+        ArithmeticOp::Divi,
+        ArithmeticOp::Modi,
+        ArithmeticOp::EQi,
+        ArithmeticOp::GTi,
+        ArithmeticOp::LTi,
+        ArithmeticOp::GTEi,
+        ArithmeticOp::LTEi,
+        ArithmeticOp::MXAi,
+        ArithmeticOp::MINi,
+        ArithmeticOp::RLi,
+        ArithmeticOp::RRi,
+        ArithmeticOp::SLi,
+        ArithmeticOp::SRi,
+        ArithmeticOp::ORi,
+        ArithmeticOp::ANDi,
+        ArithmeticOp::XORi,
+        ArithmeticOp::NANDi,
+        ArithmeticOp::NOT,
     ]);
 
     println!("已加载运算: {:?}", manager.get_loaded_operations());
@@ -333,10 +444,28 @@ fn test_arithmetic_operations() {
         );
 
         for op in [
-            ArithmeticOp::Add,
-            ArithmeticOp::Sub,
-            ArithmeticOp::Mul,
-            ArithmeticOp::Div,
+            ArithmeticOp::Addi,
+            ArithmeticOp::Subi,
+            ArithmeticOp::Mulli,
+            ArithmeticOp::Mulhi,
+            ArithmeticOp::Divi,
+            ArithmeticOp::Modi,
+            ArithmeticOp::EQi,
+            ArithmeticOp::GTi,
+            ArithmeticOp::LTi,
+            ArithmeticOp::GTEi,
+            ArithmeticOp::LTEi,
+            ArithmeticOp::MXAi,
+            ArithmeticOp::MINi,
+            ArithmeticOp::RLi,
+            ArithmeticOp::RRi,
+            ArithmeticOp::SLi,
+            ArithmeticOp::SRi,
+            ArithmeticOp::ORi,
+            ArithmeticOp::ANDi,
+            ArithmeticOp::XORi,
+            ArithmeticOp::NANDi,
+            ArithmeticOp::NOT,
         ] {
             let expected = op.compute(normal, decoded);
             let expected_low = (expected & 0xF) as u64;
@@ -362,10 +491,10 @@ fn test_arithmetic_operations() {
 fn test_subtable_operations() {
     println!("\n=== 子表操作测试 ===");
     let mut manager = ArithmeticLookupManager::<u64>::new();
-    manager.add_operation(ArithmeticOp::Add);
+    manager.add_operation(ArithmeticOp::Addi);
 
     let normal_input = 77u8;
-    if let Some(subtable) = manager.get_subtable(ArithmeticOp::Add, normal_input) {
+    if let Some(subtable) = manager.get_subtable(ArithmeticOp::Addi, normal_input) {
         println!(
             "选择{}运算，正常输入{}的子表",
             subtable.get_operation().name(),
@@ -377,7 +506,7 @@ fn test_subtable_operations() {
 
         for (encoded, (low, high)) in encoded_inputs.iter().zip(batch_results.iter()) {
             let decoded = decode_special_encoded_byte(*encoded);
-            let expected = ArithmeticOp::Add.compute(normal_input, decoded);
+            let expected = ArithmeticOp::Addi.compute(normal_input, decoded);
             println!(
                 "  编码输入: {}, 解码: {}, 期望: {}, 结果: ({}, {})",
                 encoded, decoded, expected, low, high
@@ -391,11 +520,11 @@ fn benchmark_operations() {
 
     println!("\n=== 性能测试 ===");
     let mut manager = ArithmeticLookupManager::<u64>::new();
-    manager.add_operations(&[ArithmeticOp::Add, ArithmeticOp::Mul]);
+    manager.add_operations(&[ArithmeticOp::Addi, ArithmeticOp::Mulli]);
 
     let iterations = 1_000_000;
 
-    for op in [ArithmeticOp::Add, ArithmeticOp::Mul] {
+    for op in [ArithmeticOp::Addi, ArithmeticOp::Mulli] {
         let start = Instant::now();
         let mut sum = 0u64;
 
@@ -426,10 +555,10 @@ mod tests {
     fn test_all_operations_correctness() {
         let mut manager = ArithmeticLookupManager::new();
         manager.add_operations(&[
-            ArithmeticOp::Add,
-            ArithmeticOp::Sub,
-            ArithmeticOp::Mul,
-            ArithmeticOp::Div,
+            ArithmeticOp::Addi,
+            ArithmeticOp::Subi,
+            ArithmeticOp::Mulli,
+            ArithmeticOp::Divi,
         ]);
 
         // 测试所有运算的正确性（抽样测试）
@@ -438,10 +567,10 @@ mod tests {
                 let decoded = decode_special_encoded_byte(encoded);
 
                 for op in [
-                    ArithmeticOp::Add,
-                    ArithmeticOp::Sub,
-                    ArithmeticOp::Mul,
-                    ArithmeticOp::Div,
+                    ArithmeticOp::Addi,
+                    ArithmeticOp::Subi,
+                    ArithmeticOp::Mulli,
+                    ArithmeticOp::Divi,
                 ] {
                     let expected = op.compute(normal, decoded);
                     let expected_low = (expected & 0xF) as u64;
@@ -469,18 +598,18 @@ mod tests {
         // 测试添加和移除操作
         assert_eq!(manager.get_loaded_operations().len(), 0);
 
-        manager.add_operation(ArithmeticOp::Add);
+        manager.add_operation(ArithmeticOp::Addi);
         assert_eq!(manager.get_loaded_operations().len(), 1);
-        assert!(manager.get_table(ArithmeticOp::Add).is_some());
+        assert!(manager.get_table(ArithmeticOp::Addi).is_some());
 
-        manager.remove_operation(ArithmeticOp::Add);
+        manager.remove_operation(ArithmeticOp::Addi);
         assert_eq!(manager.get_loaded_operations().len(), 0);
-        assert!(manager.get_table(ArithmeticOp::Add).is_none());
+        assert!(manager.get_table(ArithmeticOp::Addi).is_none());
     }
 
     #[test]
     fn test_division_by_zero() {
-        let tables = ArithmeticLookupTables::<u64>::new(ArithmeticOp::Div);
+        let tables = ArithmeticLookupTables::<u64>::new(ArithmeticOp::Divi);
 
         // 测试除零情况
         for normal in 0u8..=255 {

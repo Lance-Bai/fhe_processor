@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-auto-base-conv = { git = "https://github.com/KAIST-CryptLab/FFT-based-CircuitBootstrap.git", branch = "main" }
+refined-tfhe-lhe = { git = "https://github.com/KAIST-CryptLab/refined-tfhe-lhe.git", branch = "main" }
 tfhe = { version = "0.5.3", features = ["boolean", "shortint", "x86_64-unix"] }
 rand = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
@@ -15,8 +15,14 @@ lazy_static = "1.5.0"
 concrete-fft = "0.4.0"
 itertools = "0.14.0"
 serde = { version = "1.0", features = ["derive"] }
+num-traits = "0.2.19"
+stats = "0.0.1"
+epoch = "0.0.2"
+jemalloc-ctl = "0.5"
+jemallocator = "0.5"
 
 [dev-dependencies]
 criterion = { version = "0.4", features = ["html_reports"] }
 concrete-fft = { version = "0.4.0", features = ["serde"] }
 rayon = "1"
+jemalloc-ctl = "0.5"

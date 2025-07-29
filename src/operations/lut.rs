@@ -1,4 +1,4 @@
-use auto_base_conv::glwe_ciphertext_monic_monomial_div_assign;
+use refined_tfhe_lhe::glwe_ciphertext_monic_monomial_div_assign;
 use concrete_fft::c64;
 use tfhe::{
     boolean::prelude::PolynomialSize,
@@ -192,9 +192,9 @@ mod tests {
         let glwe_modular_std_dev = param.glwe_modular_std_dev();
 
         let mut manager = ArithmeticLookupManager::<u64>::new();
-        manager.add_operation(ArithmeticOp::Add);
-        manager.add_operation(ArithmeticOp::Mul);
-        let plain_table = manager.get_subtable(ArithmeticOp::Mul, 3).unwrap();
+        manager.add_operation(ArithmeticOp::Addi);
+        manager.add_operation(ArithmeticOp::Mulli);
+        let plain_table = manager.get_subtable(ArithmeticOp::Mulli, 3).unwrap();
         let low_vec = plain_table.get_low_nibble_subtable().to_vec();
         let high_vec = plain_table.get_high_nibble_subtable().to_vec();
         // println!("LUT low: {:?}\nhigh: {:?}", low_vec, high_vec);

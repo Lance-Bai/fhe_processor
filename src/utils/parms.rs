@@ -1,5 +1,5 @@
 use tfhe::core_crypto::prelude::*;
-use auto_base_conv::FftType;
+use refined_tfhe_lhe::FftType;
 
 
 #[derive(Clone, Copy)]

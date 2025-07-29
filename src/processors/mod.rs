@@ -5,3 +5,4 @@ pub mod convert;
 pub mod lwe_storede_ks;
 pub mod lwe_stored_ksk;
 pub mod key_gen;
+pub mod rev_trace;

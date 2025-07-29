@@ -1,0 +1,193 @@
+use tfhe::core_crypto::{
+    fft_impl::fft64::{
+        c64,
+        crypto::wop_pbs::{vertical_packing, vertical_packing_scratch},
+    },
+    prelude::*,
+};
+use tfhe::{
+    boolean::prelude::PolynomialSize,
+    core_crypto::prelude::{
+        ComputationBuffers, Fft, FourierGgswCiphertextList, LweCiphertext, PolynomialList,
+    },
+};
+/// 将多个查找表分别打包为密文查找表（每个查找表独立生成一个 PolynomialList）
+///
+/// # 参数
+/// - `tables`: 多个查找表，每个元素是一个查找表（例如不同chunk分表或不同功能表）
+/// - `polynomial_size`: 多项式阶数（每个GLWE多项式能装多少个元素）
+/// - `delta`: 放大倍数（TFHE编码用）
+///
+/// # 返回
+/// - `Vec<PolynomialList<Vec<u64>>>`: 每个查找表分别生成的密文查找表
+///
+/// # 用法
+/// ```ignore
+/// let lut_lists = generate_lut_from_vecs(&split_tables, PolynomialSize(1024), 1 << 40);
+/// // lut_lists[i] 就是第 i 个查找表的密文查找表（PolynomialList）
+/// ```
+pub fn generate_lut_from_vecs(
+    tables: &[Vec<usize>],
+    polynomial_size: PolynomialSize,
+    delta: u64,
+) -> Vec<PolynomialList<Vec<u64>>> {
+    let mut result = Vec::with_capacity(tables.len());
+
+    for (table_idx, table) in tables.iter().enumerate() {
+        let table_len = table.len();
+        // 需要多少个多项式（每个多项式 polynomial_size.0 个元素，最后一个可能补0）
+        let num_poly = (table_len + polynomial_size.0 - 1) / polynomial_size.0;
+
+        // 先将所有多项式拼成一个一维向量（Concrete/TFHE标准格式）
+        let mut flat: Vec<u64> = Vec::with_capacity(num_poly * polynomial_size.0);
+
+        for poly_idx in 0..num_poly {
+            for i in 0..polynomial_size.0 {
+                let idx = poly_idx * polynomial_size.0 + i;
+                let val = if idx < table_len {
+                    (table[idx] as u64) * delta
+                } else {
+                    0
+                };
+                flat.push(val);
+            }
+        }
+
+        // 构造 PolynomialList，flat 按多项式顺序拼接
+        let poly_list = PolynomialList::from_container(flat, polynomial_size);
+        result.push(poly_list);
+
+        // 可选调试输出
+        // #[cfg(test)]
+        // println!(
+        //     "Table #{table_idx}: length = {table_len}, packed into {num_poly} polys, poly_size = {}",
+        //     polynomial_size.0
+        // );
+    }
+
+    result
+}
+
+/// 单查找表的TFHE vertical_packing查值函数
+///
+/// # 参数
+/// - `lut`: 查找表（PolynomialList）
+/// - `lwe_out`: 输出密文（LweCiphertext，mutable）
+/// - `ggsw_list`: GGSW密钥组
+/// - `fft`: FFT上下文
+/// - `buffer`: 临时scratch buffer
+/// - `lut_input_size`: 查找表输入bit数（或总输入数），需与GLWE参数对应
+///
+/// # 功能
+/// 用vertical_packing做一次完整查找表查值。查找结果写入lwe_out。
+pub fn tfhe_vertical_packing_lookup(
+    lut: &PolynomialList<Vec<u64>>,
+    lwe_out: &mut LweCiphertext<Vec<u64>>,
+    ggsw_list: &FourierGgswCiphertextList<Vec<c64>>,
+    fft: &Fft,
+    buffer: &mut ComputationBuffers,
+    lut_input_size: usize,
+) {
+    // 确保buffer大小足够
+    buffer.resize(
+        vertical_packing_scratch::<u64>(
+            ggsw_list.glwe_size(),
+            ggsw_list.polynomial_size(),
+            lut.polynomial_count(),
+            ggsw_list.count(),
+            fft.as_view(),
+        )
+        .unwrap()
+        .unaligned_bytes_required(),
+    );
+    let stack = buffer.stack();
+
+    vertical_packing(
+        lut.as_view(),
+        lwe_out.as_mut_view(),
+        ggsw_list.as_view(),
+        fft.as_view(),
+        stack,
+    );
+}
+
+/// 多查找表批量vertical_packing查值
+///
+/// # 参数
+/// - `luts`: 查找表数组（每个PolynomialList）
+/// - `lwe_outs`: 输出密文数组（每个LweCiphertext）
+/// - 其它同上
+pub fn tfhe_vertical_packing_multi_lookup(
+    luts: &[PolynomialList<Vec<u64>>],
+    lwe_outs: &mut [LweCiphertext<Vec<u64>>],
+    ggsw_list: &FourierGgswCiphertextList<Vec<c64>>,
+    fft: &Fft,
+    buffer: &mut ComputationBuffers,
+    lut_input_size: usize,
+) {
+    assert_eq!(luts.len(), lwe_outs.len());
+    for (lut, lwe_out) in luts.iter().zip(lwe_outs.iter_mut()) {
+        tfhe_vertical_packing_lookup(lut, lwe_out, ggsw_list, fft, buffer, lut_input_size);
+    }
+    
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        operations::plain_lut::split_adjusted_lut_by_chunk,
+        utils::instance::{Processor_4_bits, ZeroNoiseTest},
+    };
+
+    use super::*;
+    use rand::Rng;
+    // 生成一个随机查找表
+    fn random_lut(len: usize, max_val: usize) -> Vec<usize> {
+        let mut rng = rand::thread_rng();
+        (0..len).map(|_| rng.gen_range(0..=max_val)).collect()
+    }
+
+    #[test]
+    fn test_generate_lut_from_vecs_basic() {
+        // 配置
+        let num_tables = 3;
+        let table_len = 3000;
+        let max_val = 255;
+        let polynomial_size = PolynomialSize(1024);
+        let delta = 1 << 32;
+
+        // 随机生成多个查找表
+        let tables: Vec<Vec<usize>> = (0..num_tables)
+            .map(|_| random_lut(table_len, max_val))
+            .collect();
+
+        // 执行打包
+        let poly_lists = generate_lut_from_vecs(&tables, polynomial_size, delta);
+
+        assert_eq!(poly_lists.len(), num_tables);
+
+        for (table_idx, (src_table, poly_list)) in tables.iter().zip(poly_lists.iter()).enumerate()
+        {
+            let flat = poly_list.as_ref(); // <-- 这里用 &[u64]
+            let needed = src_table.len();
+            // 检查内容（忽略末尾补零部分）
+            for i in 0..needed {
+                let expect = (src_table[i] as u64) * delta;
+                assert_eq!(
+                    flat[i], expect,
+                    "Mismatch at table #{table_idx}, lut idx {i}: expect {expect}, got {}",
+                    flat[i]
+                );
+            }
+            // 检查补零区
+            for i in needed..flat.len() {
+                assert_eq!(
+                    flat[i], 0,
+                    "Nonzero padding at table #{table_idx}, flat idx {i}: got {}",
+                    flat[i]
+                );
+            }
+        }
+    }
+
+}

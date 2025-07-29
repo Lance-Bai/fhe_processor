@@ -1,5 +1,5 @@
 use aligned_vec::CACHELINE_ALIGN;
-use auto_base_conv::glwe_ciphertext_monic_monomial_div;
+use refined_tfhe_lhe::glwe_ciphertext_monic_monomial_div;
 use dyn_stack::{PodStack, ReborrowMut};
 
 use itertools::izip;
