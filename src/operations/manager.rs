@@ -1,6 +1,11 @@
 use concrete_fft::c64;
 use tfhe::core_crypto::prelude::FourierGgswCiphertextList;
 
+pub struct  Manager{
+    
+}
+
+
 
 
 

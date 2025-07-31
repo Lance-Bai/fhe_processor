@@ -88,7 +88,7 @@ lazy_static! {
         FftType::Split(38), // fft_type_from_large
         DecompositionBaseLog(13), // ss_base_log
         DecompositionLevelCount(3), // ss_level
-        DecompositionBaseLog(9), // cbs_base_log
+        DecompositionBaseLog(8), // cbs_base_log
         DecompositionLevelCount(2), // cbs_level
         LutCountLog(1), // log_lut_count
         CiphertextModulus::<u64>::new_native(), // ciphertext_modulus

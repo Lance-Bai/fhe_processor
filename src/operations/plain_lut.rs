@@ -1,12 +1,45 @@
-use crate::operations::{mask_chunk::masking_chunk_msb, operand::ArithmeticOp};
+use crate::operations::{
+    mask_chunk::{masking_chunk_msb, masking_chunk_msb_decode},
+    operand::ArithmeticOp,
+};
 
 /// 生成一个查找表，每个表项是完整plain_log位宽的运算结果
-pub fn get_plain_lut(plain_log: usize, op: &ArithmeticOp) -> Vec<usize> {
+pub fn get_plain_cipher_cipher(plain_log: usize, op: &ArithmeticOp) -> Vec<usize> {
     let lut_input_size: usize = 1 << (plain_log * 2);
     let mut lut = Vec::with_capacity(lut_input_size);
 
     for i in 0..lut_input_size {
         let result = op.compute_split(i, plain_log);
+        lut.push(result);
+    }
+    lut
+}
+
+pub fn get_plain_lut_cipher_plain(
+    plain_log: usize,
+    immediate: usize,
+    op: &ArithmeticOp,
+) -> Vec<usize> {
+    let lut_input_size: usize = 1 << (plain_log);
+    let mut lut = Vec::with_capacity(lut_input_size);
+
+    for i in 0..lut_input_size {
+        let result = op.compute_cipher_plain(i, immediate, plain_log);
+        lut.push(result);
+    }
+    lut
+}
+
+pub fn get_plain_lut_plain_cipher(
+    plain_log: usize,
+    immediate: usize,
+    op: &ArithmeticOp,
+) -> Vec<usize> {
+    let lut_input_size: usize = 1 << (plain_log);
+    let mut lut = Vec::with_capacity(lut_input_size);
+
+    for i in 0..lut_input_size {
+        let result = op.compute_plain_cipher(i, immediate, plain_log);
         lut.push(result);
     }
     lut
@@ -47,6 +80,43 @@ pub fn adjust_lut_with_masking(
                 offset += bits;
             }
             plain_lut[masked_input]
+        })
+        .collect()
+}
+
+/// 使用解码版的 adjust_lut_with_masking
+///
+/// plain_lut: 明文查找表
+/// input_bitwidths: 各输入的bit宽数组
+/// chunk_size: 掩码分块宽度
+///
+/// 返回：解码后的查找表
+pub fn adjust_lut_with_masking_decode(
+    plain_lut: &[usize],
+    input_bitwidths: &[usize],
+    chunk_size: usize,
+) -> Vec<usize> {
+    let total_bits: usize = input_bitwidths.iter().sum();
+    let lut_input_size = 1 << total_bits;
+    (0..lut_input_size)
+        .map(|masked_input| {
+            // 拆分每个输入块的掩码值
+            let mut blocks = Vec::with_capacity(input_bitwidths.len());
+            let mut acc = masked_input;
+            for &bits in input_bitwidths {
+                blocks.push(acc & ((1 << bits) - 1));
+                acc >>= bits;
+            }
+            // 对每个block做解码
+            let mut decoded_input = 0usize;
+            let mut offset = 0;
+            for (masked_block, &bits) in blocks.iter().zip(input_bitwidths) {
+                let plain_block = masking_chunk_msb_decode(*masked_block, chunk_size, bits);
+                decoded_input |= plain_block << offset;
+                offset += bits;
+            }
+            // 查明文表
+            plain_lut[decoded_input]
         })
         .collect()
 }
@@ -96,10 +166,44 @@ pub fn build_split_lut_tables(
     op: &ArithmeticOp,
 ) -> Vec<Vec<usize>> {
     // 1. 生成明文查找表
-    let plain_lut = get_plain_lut(plain_log, op);
+    let plain_lut = get_plain_cipher_cipher(plain_log, op);
 
     // 2. 掩码调整
-    let adjusted_lut = adjust_lut_with_masking(&plain_lut, &input_bitwidths, chunk_size);
+    let adjusted_lut = adjust_lut_with_masking_decode(&plain_lut, &input_bitwidths, chunk_size);
+
+    // 3. 拆分为chunk分表
+    split_adjusted_lut_by_chunk(&adjusted_lut, plain_log, chunk_size)
+}
+
+pub fn build_split_lut_tables_cipher_plain(
+    plain_log: usize,
+    immediate: usize,
+    input_bitwidths: Vec<usize>,
+    chunk_size: usize,
+    op: &ArithmeticOp,
+) -> Vec<Vec<usize>> {
+    // 1. 生成明文查找表
+    let plain_lut = get_plain_lut_cipher_plain(plain_log, immediate, op);
+
+    // 2. 掩码调整
+    let adjusted_lut = adjust_lut_with_masking_decode(&plain_lut, &input_bitwidths, chunk_size);
+
+    // 3. 拆分为chunk分表
+    split_adjusted_lut_by_chunk(&adjusted_lut, plain_log, chunk_size)
+}
+
+pub fn build_split_lut_tables_plain_cipher(
+    plain_log: usize,
+    immediate: usize,
+    input_bitwidths: Vec<usize>,
+    chunk_size: usize,
+    op: &ArithmeticOp,
+) -> Vec<Vec<usize>> {
+    // 1. 生成明文查找表
+    let plain_lut = get_plain_lut_plain_cipher(plain_log, immediate, op);
+
+    // 2. 掩码调整
+    let adjusted_lut = adjust_lut_with_masking_decode(&plain_lut, &input_bitwidths, chunk_size);
 
     // 3. 拆分为chunk分表
     split_adjusted_lut_by_chunk(&adjusted_lut, plain_log, chunk_size)
@@ -107,6 +211,8 @@ pub fn build_split_lut_tables(
 
 #[cfg(test)]
 mod tests {
+    use crate::operations::mask_chunk::usize_to_vec;
+
     use super::*;
     #[test]
     fn test_lut_masking_chunk_correctness() {
@@ -174,52 +280,64 @@ mod tests {
     }
 
     #[test]
-    fn test_adjust_lut_with_masking_and_split() {
-        let plain_log = 8;
-        let chunk_size = 4;
-        let input_bitwidths = vec![plain_log; 2];
-        let op = ArithmeticOp::Add;
-
-        // 1. 明文查找表
-        let plain_lut = get_plain_lut(plain_log, &op);
-
-        // 2. 自动生成掩码查找表
-        let adjusted_lut = adjust_lut_with_masking(&plain_lut, &input_bitwidths, chunk_size);
-
-        // 3. 手工生成掩码查找表（对比）
-        let lut_input_size = 1 << (plain_log * 2);
-        let mut manual_lut = Vec::with_capacity(lut_input_size);
-        for i in 0..lut_input_size {
-            let lhs = i & ((1 << plain_log) - 1);
-            let rhs = i >> plain_log;
-            let masked_lhs = masking_chunk_msb(lhs, chunk_size, plain_log);
-            let masked_rhs = masking_chunk_msb(rhs, chunk_size, plain_log);
-            let masked_input = masked_lhs | (masked_rhs << plain_log);
-            manual_lut.push(plain_lut[masked_input]);
-        }
-
-        // 4. 两种掩码查找表内容应一致
-        assert_eq!(
-            adjusted_lut, manual_lut,
-            "adjust_lut_with_masking does not match manual construction"
-        );
-
-        // 5. 拆分两个表，分chunk比对
-        let split1 = split_adjusted_lut_by_chunk(&adjusted_lut, plain_log, chunk_size);
-        let split2 = split_adjusted_lut_by_chunk(&manual_lut, plain_log, chunk_size);
-        assert_eq!(split1, split2, "拆分后的chunk分表不一致");
-
-        // 6. 检查每一项的拆分是否和人工bit拆分一致
-        for (idx, &val) in adjusted_lut.iter().enumerate() {
-            let segs = plain_log / chunk_size;
-            for seg in 0..segs {
-                let mask = (1 << chunk_size) - 1;
-                let chunk = (val >> (seg * chunk_size)) & mask;
-                assert_eq!(
-                    chunk, split1[seg][idx],
-                    "拆分chunk第{seg}块，表项{idx}，bit位不一致"
-                );
+    fn test_masking_chunk_encode_decode() {
+        for &chunk_size in &[1, 2, 4] {
+            for &bits in &[8] {
+                println!("==== chunk_size: {}, bits: {} ====", chunk_size, bits);
+                let cases = (1 << bits);
+                for v in 0..cases {
+                    let encoded = masking_chunk_msb(v, chunk_size, bits);
+                    let decoded = masking_chunk_msb_decode(encoded, chunk_size, bits);
+                    if decoded != v {
+                        // 展开原始、编码后、解码后 bit 向量对比
+                        let orig_bits = usize_to_vec(v, bits);
+                        let encoded_bits = usize_to_vec(encoded, bits); // 注意这里encoded实际长度可不同
+                        let decoded_bits = usize_to_vec(decoded, bits);
+                        println!("!!! MISMATCH !!!");
+                        println!("v         = {} ({:b})", v, v);
+                        println!("encoded   = {} ({:b})", encoded, encoded);
+                        println!("decoded   = {} ({:b})", decoded, decoded);
+                        println!("orig_bits    = {:?}", orig_bits);
+                        println!("encoded_bits = {:?}", encoded_bits);
+                        println!("decoded_bits = {:?}", decoded_bits);
+                        panic!(
+                            "Fail: v={}, chunk_size={}, bits={}, encoded={}, decoded={}",
+                            v, chunk_size, bits, encoded, decoded
+                        );
+                    } else if v == 0 || v == cases - 1 {
+                        // 打印首末几个示例，便于肉眼核查
+                        println!("OK: v={}, encoded={}, decoded={}", v, encoded, decoded);
+                    }
+                }
             }
+        }
+        println!("All masking_chunk_msb encode/decode tests passed!");
+    }
+
+    #[test]
+    fn test_adjust_lut_with_masking_decode() {
+        let input_bitwidths = vec![8, 8];
+        let chunk_size = 4;
+        // 构造一个明文查找表 plain_lut[i] = i
+        let total_bits: usize = input_bitwidths.iter().sum();
+        let plain_lut: Vec<usize> = (0..(1 << total_bits)).collect();
+        let masked_lut = adjust_lut_with_masking_decode(&plain_lut, &input_bitwidths, chunk_size);
+        // 验证逆向性
+        for (i, &v) in masked_lut.iter().enumerate() {
+            let mut blocks = Vec::with_capacity(input_bitwidths.len());
+            let mut acc = i;
+            for &bits in &input_bitwidths {
+                blocks.push(acc & ((1 << bits) - 1));
+                acc >>= bits;
+            }
+            let mut decoded_input = 0usize;
+            let mut offset = 0;
+            for (masked_block, &bits) in blocks.iter().zip(&input_bitwidths) {
+                let plain_block = masking_chunk_msb_decode(*masked_block, chunk_size, bits);
+                decoded_input |= plain_block << offset;
+                offset += bits;
+            }
+            assert_eq!(v, plain_lut[decoded_input]);
         }
     }
 }

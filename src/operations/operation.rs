@@ -1,14 +1,20 @@
+use crate::{
+    operations::{
+        cipher_lut::{self, generate_lut_from_vecs, tfhe_vertical_packing_lookup},
+        lut,
+        operand::ArithmeticOp,
+        plain_lut::{
+            build_split_lut_tables, build_split_lut_tables_cipher_plain,
+            build_split_lut_tables_plain_cipher,
+        },
+    },
+    processors::lwe_stored_ksk::LweStoredReusedKeyswitchKey,
+};
 use concrete_fft::c64;
 use tfhe::core_crypto::prelude::{
     ComputationBuffers, Fft, FourierGgswCiphertextList, LweCiphertext, PolynomialList,
 };
-
-use crate::{operations::{
-    cipher_lut::{self, generate_lut_from_vecs, tfhe_vertical_packing_lookup},
-    operand::ArithmeticOp,
-    plain_lut::build_split_lut_tables,
-}, processors::lwe_stored_ksk::LweStoredReusedKeyswitchKey};
-
+use tfhe::core_crypto::{fft_impl::fft64::crypto::wop_pbs::vertical_packing_scratch, prelude::*};
 #[derive(Debug, Clone, Copy)]
 pub enum OperandType {
     BothCipher,
@@ -34,9 +40,28 @@ impl Operation {
         chunk_size: usize,
         poly_size: tfhe::boolean::prelude::PolynomialSize,
         delta: u64,
+        immediate: Option<usize>,
     ) -> Self {
-        let plain_lut =
-            build_split_lut_tables(bit_width, vec![bit_width, bit_width], chunk_size, &op);
+        let plain_lut = match op_type {
+            OperandType::BothCipher => {
+                build_split_lut_tables(bit_width, vec![bit_width, bit_width], chunk_size, &op)
+            }
+            OperandType::PlainCipher => build_split_lut_tables_plain_cipher(
+                bit_width,
+                immediate.unwrap(),
+                vec![bit_width],
+                chunk_size,
+                &op,
+            ),
+            OperandType::CipherPlain => build_split_lut_tables_cipher_plain(
+                bit_width,
+                immediate.unwrap(),
+                vec![bit_width],
+                chunk_size,
+                &op,
+            ),
+        };
+
         let cipher_lut = generate_lut_from_vecs(&plain_lut, poly_size, delta);
         Self {
             op,
@@ -62,16 +87,26 @@ impl Operation {
         fft: &Fft,
         buffer: &mut ComputationBuffers,
     ) {
-        let lut_input_size= match self.op_type {
+        let lut_input_size = match self.op_type {
             OperandType::BothCipher => self.bit_width * 2,
             OperandType::PlainCipher => self.bit_width,
             OperandType::CipherPlain => self.bit_width,
         };
+        let lut = &self.cipher_lut[0];
+        buffer.resize(
+            vertical_packing_scratch::<u64>(
+                ggsw_list.glwe_size(),
+                ggsw_list.polynomial_size(),
+                lut.polynomial_count(),
+                ggsw_list.count(),
+                fft.as_view(),
+            )
+            .unwrap()
+            .unaligned_bytes_required(),
+        );
         assert_eq!(self.cipher_lut.len(), lwe_outs.len());
         for (lut, lwe_out) in self.cipher_lut.iter().zip(lwe_outs.iter_mut()) {
             tfhe_vertical_packing_lookup(lut, lwe_out, ggsw_list, fft, buffer, lut_input_size);
         }
     }
 }
-
-

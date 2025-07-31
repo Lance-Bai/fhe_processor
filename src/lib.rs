@@ -138,17 +138,10 @@ mod circuit_bootstrapping_tests {
         let glwe_dimension = param.glwe_dimension();
         let glwe_modular_std_dev = param.glwe_modular_std_dev();
         let large_glwe_dimension = param.large_glwe_dimension();
-        let large_glwe_modular_std_dev = param.large_glwe_modular_std_dev();
         let pbs_base_log = param.pbs_base_log();
         let pbs_level = param.pbs_level();
         let ks_base_log = param.ks_base_log();
         let ks_level = param.ks_level();
-        let glwe_ds_to_large_base_log = param.glwe_ds_to_large_base_log();
-        let glwe_ds_to_large_level = param.glwe_ds_to_large_level();
-        let fft_type_to_large = param.fft_type_to_large();
-        let glwe_ds_from_large_base_log = param.glwe_ds_from_large_base_log();
-        let glwe_ds_from_large_level = param.glwe_ds_from_large_level();
-        let fft_type_from_large = param.fft_type_from_large();
         let auto_base_log = param.auto_base_log();
         let auto_level = param.auto_level();
         let auto_fft_type = param.fft_type_auto();
@@ -156,13 +149,10 @@ mod circuit_bootstrapping_tests {
         let ss_level = param.ss_level();
         let cbs_base_log = param.cbs_base_log();
         let cbs_level = param.cbs_level();
-        let log_lut_count = param.log_lut_count();
         let ciphertext_modulus = param.ciphertext_modulus();
         let message_size = param.message_size();
-
         let extract_size = 4;
         let glwe_size = glwe_dimension.to_glwe_size();
-        let large_glwe_size = large_glwe_dimension.to_glwe_size();
         let delta = 1 << (u64::BITS as usize - message_size);
         // Set random generators and buffers
         let mut boxed_seeder = new_seeder();
@@ -232,20 +222,7 @@ mod circuit_bootstrapping_tests {
         );
         let ss_key = ss_key_owned.as_view();
 
-        let mut acc_glev = GlweCiphertextList::new(
-            u64::ZERO,
-            glwe_size,
-            polynomial_size,
-            GlweCiphertextCount(cbs_level.0),
-            ciphertext_modulus,
-        );
-
-        let mut output_1 = LweCiphertext::new(
-            u64::ZERO,
-            glwe_lwe_sk.lwe_dimension().to_lwe_size(),
-            ciphertext_modulus,
-        );
-        let mut output_2 = LweCiphertext::new(
+        let output_lwe = LweCiphertext::new(
             u64::ZERO,
             glwe_lwe_sk.lwe_dimension().to_lwe_size(),
             ciphertext_modulus,
@@ -253,7 +230,7 @@ mod circuit_bootstrapping_tests {
 
         let fft = Fft::new(polynomial_size);
         let mut buffer = ComputationBuffers::new();
-        let mut lwe_outs = vec![output_1.clone(), output_2.clone(), output_1, output_2];
+        let mut lwe_outs = vec![output_lwe.clone(), output_lwe.clone(), output_lwe.clone(), output_lwe.clone()];
         println!(
             "Key generation done. Time: {:.3?}, start lut generation",
             keygen_start.elapsed()
@@ -261,11 +238,12 @@ mod circuit_bootstrapping_tests {
         let gen_lut_start = Instant::now();
         let add_op = Operation::new(
             ArithmeticOp::Add,
-            crate::operations::operation::OperandType::BothCipher,
+            crate::operations::operation::OperandType::CipherPlain,
             16,
             4,
             polynomial_size,
             delta,
+            Some(0)
         );
         println!("LUT generation time: {:.3?}", gen_lut_start.elapsed());
 
@@ -273,7 +251,7 @@ mod circuit_bootstrapping_tests {
         let mut cbs_times = Vec::new();
         let mut lut_times = Vec::new();
 
-        for msg in 0..=0 {
+        for msg in 0..=255 {
             let mut fourier_gsw_list_high = FourierGgswCiphertextList::new(
                 vec![
                     c64::default();
@@ -404,8 +382,8 @@ mod circuit_bootstrapping_tests {
             );
 
             circuit_bootstrapping_4_bits_at_once_rev_tr(
-                &lwe_zero_low,
-                &mut fourier_gsw_list_zero_high,
+                &lwe_low,
+                &mut fourier_gsw_list_zero_low,
                 fourier_bsk,
                 &auto_keys,
                 ss_key,
@@ -414,7 +392,7 @@ mod circuit_bootstrapping_tests {
             );
 
             circuit_bootstrapping_4_bits_at_once_rev_tr(
-                &lwe_zero_high,
+                &lwe_high,
                 &mut fourier_gsw_list_zero_high,
                 fourier_bsk,
                 &auto_keys,
@@ -432,10 +410,10 @@ mod circuit_bootstrapping_tests {
                 fourier_gsw_list_low.clone(),
                 fourier_gsw_list_zero_high.clone(),
                 fourier_gsw_list_zero_low.clone(),
-                fourier_gsw_list_high,
-                fourier_gsw_list_low,
-                fourier_gsw_list_zero_high,
-                fourier_gsw_list_zero_low,
+                // fourier_gsw_list_high,
+                // fourier_gsw_list_low,
+                // fourier_gsw_list_zero_high,
+                // fourier_gsw_list_zero_low,
             ];
             let mut ggsw_list = concat_ggsw_lists(ggsw_lists);
 
@@ -453,7 +431,7 @@ mod circuit_bootstrapping_tests {
                 "Decrypted plaintext: {} -> {:08b}, expected: {}",
                 result_high << 4 | result_low,
                 result_high << 4 | result_low,
-                (msg * 5) % 256
+                (msg * 2) % 256
             );
             // 统计平均时间
         }

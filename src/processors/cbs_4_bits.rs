@@ -8,7 +8,9 @@ use tfhe::core_crypto::{
 
 use crate::{
     processors::{
-        convert::convert_to_ggsw_after_blind_rotate_4_bit_rev_tr, lwe_stored_ksk::LweStoredReusedKeyswitchKey, lwe_storede_ks::stored_reused_keyswitch_lwe_ciphertext
+        convert::convert_to_ggsw_after_blind_rotate_4_bit_rev_tr,
+        lwe_stored_ksk::LweStoredReusedKeyswitchKey,
+        lwe_storede_ks::stored_reused_keyswitch_lwe_ciphertext,
     },
     utils::parms::ProcessorParam,
 };
@@ -136,6 +138,7 @@ pub fn circuit_bootstrapping_4_bits_at_once_rev_tr<Scalar, InputCont>(
     let glwe_size = parms.glwe_dimension().to_glwe_size();
     let ciphertext_modulus = parms.ciphertext_modulus();
     let log_lut_count = parms.log_lut_count();
+    let num_extracts = parms.extract_size();
     ///////////////////////////////////////////////////////////////////
     let mut small_lwe = LweCiphertext::new(Scalar::ZERO, ksk.output_lwe_size(), ciphertext_modulus);
 
@@ -164,7 +167,7 @@ pub fn circuit_bootstrapping_4_bits_at_once_rev_tr<Scalar, InputCont>(
         log_lut_count,
         cbs_base_log,
         cbs_level,
-        4,
+        num_extracts,
         ciphertext_modulus,
     );
     let mut ggsw_temp = GgswCiphertext::new(

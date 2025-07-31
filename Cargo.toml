@@ -26,3 +26,9 @@ criterion = { version = "0.4", features = ["html_reports"] }
 concrete-fft = { version = "0.4.0", features = ["serde"] }
 rayon = "1"
 jemalloc-ctl = "0.5"
+
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "vendor"
