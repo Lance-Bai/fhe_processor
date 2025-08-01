@@ -137,7 +137,6 @@ mod circuit_bootstrapping_tests {
         let polynomial_size = param.polynomial_size();
         let glwe_dimension = param.glwe_dimension();
         let glwe_modular_std_dev = param.glwe_modular_std_dev();
-        let large_glwe_dimension = param.large_glwe_dimension();
         let pbs_base_log = param.pbs_base_log();
         let pbs_level = param.pbs_level();
         let ks_base_log = param.ks_base_log();
@@ -155,8 +154,8 @@ mod circuit_bootstrapping_tests {
         let glwe_size = glwe_dimension.to_glwe_size();
         let delta = 1 << (u64::BITS as usize - message_size);
         // Set random generators and buffers
-        let mut boxed_seeder = new_seeder();
-        let seeder = boxed_seeder.as_mut();
+        let mut boxed_seeder: Box<dyn Seeder> = new_seeder();
+        let seeder: &mut dyn Seeder = boxed_seeder.as_mut();
 
         let mut secret_generator =
             SecretRandomGenerator::<ActivatedRandomGenerator>::new(seeder.seed());
