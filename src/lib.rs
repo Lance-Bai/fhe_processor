@@ -229,7 +229,7 @@ mod circuit_bootstrapping_tests {
 
         let fft = Fft::new(polynomial_size);
         let mut buffer = ComputationBuffers::new();
-        let mut lwe_outs = vec![output_lwe.clone(), output_lwe.clone(), output_lwe.clone(), output_lwe.clone()];
+        let mut lwe_outs = vec![output_lwe;8];
         println!(
             "Key generation done. Time: {:.3?}, start lut generation",
             keygen_start.elapsed()
@@ -238,7 +238,7 @@ mod circuit_bootstrapping_tests {
         let add_op = Operation::new(
             ArithmeticOp::Add,
             crate::operations::operation::OperandType::CipherPlain,
-            16,
+            32,
             4,
             polynomial_size,
             delta,
@@ -409,12 +409,12 @@ mod circuit_bootstrapping_tests {
                 fourier_gsw_list_low.clone(),
                 fourier_gsw_list_zero_high.clone(),
                 fourier_gsw_list_zero_low.clone(),
-                // fourier_gsw_list_high,
-                // fourier_gsw_list_low,
-                // fourier_gsw_list_zero_high,
-                // fourier_gsw_list_zero_low,
+                fourier_gsw_list_high,
+                fourier_gsw_list_low,
+                fourier_gsw_list_zero_high,
+                fourier_gsw_list_zero_low,
             ];
-            let mut ggsw_list = concat_ggsw_lists(ggsw_lists);
+            let ggsw_list = concat_ggsw_lists(ggsw_lists);
 
             add_op.vertical_packing_multi_lookup(&mut lwe_outs, &ggsw_list, &fft, &mut buffer);
 
