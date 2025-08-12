@@ -121,26 +121,50 @@ pub fn adjust_lut_with_masking_decode(
         .collect()
 }
 
+// pub fn split_adjusted_lut_by_chunk(
+//     //低位在前
+//     adjusted_lut: &[usize], // 长度 = 1 << 总输入bit数
+//     plain_log: usize,       // 结果位宽
+//     chunk_size: usize,
+// ) -> Vec<Vec<usize>> {
+//     assert!(
+//         plain_log % chunk_size == 0,
+//         "plain_log 必须被 chunk_size 整除"
+//     );
+//     let segments = plain_log / chunk_size;
+//     let mask = (1 << chunk_size) - 1;
+//     let len = adjusted_lut.len();
+
+//     let mut result_tables = vec![Vec::with_capacity(len); segments];
+
+//     for value in adjusted_lut {
+//         for seg in 0..segments {
+//             let chunk = (value >> (seg * chunk_size)) & mask;
+//             result_tables[seg].push(chunk);
+//         }
+//     }
+//     result_tables
+// }
 pub fn split_adjusted_lut_by_chunk(
-    //低位在前
+    // 高位在前（result_tables[0] 为最高位分段）
     adjusted_lut: &[usize], // 长度 = 1 << 总输入bit数
     plain_log: usize,       // 结果位宽
     chunk_size: usize,
 ) -> Vec<Vec<usize>> {
-    assert!(
-        plain_log % chunk_size == 0,
-        "plain_log 必须被 chunk_size 整除"
-    );
+    assert!(plain_log % chunk_size == 0, "plain_log 必须被 chunk_size 整除");
     let segments = plain_log / chunk_size;
-    let mask = (1 << chunk_size) - 1;
+    let mask = (1usize << chunk_size) - 1;
     let len = adjusted_lut.len();
 
+    // result_tables[0] 对应最高位分段，依次到最低位
     let mut result_tables = vec![Vec::with_capacity(len); segments];
 
-    for value in adjusted_lut {
-        for seg in 0..segments {
-            let chunk = (value >> (seg * chunk_size)) & mask;
-            result_tables[seg].push(chunk);
+    for &value in adjusted_lut.iter() {
+        for msb_seg in 0..segments {
+            // 从高到低取段：最高段的移位最大
+            let shift = (segments - 1 - msb_seg) * chunk_size;
+            let chunk = (value >> shift) & mask;
+            result_tables[msb_seg].push(chunk);
         }
     }
     result_tables

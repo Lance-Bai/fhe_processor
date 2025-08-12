@@ -21,7 +21,10 @@ use tfhe::{
 };
 
 use crate::{
-    operations::operation::{OperandType, Operation},
+    operations::{
+        operand::ArithmeticOp,
+        operation::{OperandType, Operation},
+    },
     processors::{
         cbs_4_bits::circuit_bootstrapping_4_bits_at_once_rev_tr,
         key_gen::allocate_and_generate_new_reused_lwe_key,
@@ -36,6 +39,16 @@ pub struct Step {
     pub op_index: usize,           // Operation在Vec中的索引
     pub input_indices: Vec<usize>, // 这一操作的输入数据在DataList中的索引
     pub output_index: usize,       // 结果写入DataList哪个位置
+}
+
+impl Step {
+    pub fn new(op_index: usize, input_indices: Vec<usize>, output_index: usize) -> Self {
+        Self {
+            op_index,
+            input_indices,
+            output_index,
+        }
+    }
 }
 
 pub struct OperationManager {
@@ -160,7 +173,7 @@ impl OperationManager {
             cbs_base_log,
             cbs_level,
         );
-        let fourier_ggsw_lists = vec![fourier_ggsw_list; data_len.div_ceil(message_size)];
+        let fourier_ggsw_lists = vec![fourier_ggsw_list; data_len.div_ceil(message_size) * 2];
 
         let lwe = allocate_and_encrypt_new_lwe_ciphertext(
             &glwe_lwe_sk,
@@ -194,8 +207,22 @@ impl OperationManager {
         }
     }
 
-    pub fn add_operation(&mut self, op: Operation) {
-        self.operations.push(op);
+    pub fn add_operation(
+        &mut self,
+        op: ArithmeticOp,
+        op_type: OperandType,
+        immediate: Option<usize>,
+    ) {
+        let operand = Operation::new(
+            op,
+            op_type,
+            self.data_len,
+            self.params.extract_size(),
+            self.params.polynomial_size(),
+            1 << (u64::BITS as usize - self.params.message_size()),
+            immediate,
+        );
+        self.operations.push(operand);
     }
 
     pub fn remove_operation(&mut self, index: usize) {
@@ -224,7 +251,7 @@ impl OperationManager {
                 &self.glwe_sk.as_lwe_secret_key(),
                 lwe, // 这里直接是 &mut LweCiphertext<_>
                 Plaintext(chunk << (u64::BITS as usize - self.params.message_size())),
-                self.params.lwe_modular_std_dev(),
+                self.params.glwe_modular_std_dev(),
                 &mut self.encryption_generator,
             );
         }
@@ -236,7 +263,9 @@ impl OperationManager {
 
         for (lwe, chunk) in lwe_list.iter().zip(chunks.iter_mut()) {
             let plain = decrypt_lwe_ciphertext(&self.glwe_sk.as_lwe_secret_key(), lwe);
-            *chunk = (plain.0 >> (u64::BITS as usize - self.params.message_size() - 1) + 1) >> 1;
+            *chunk = (((plain.0 >> (u64::BITS as usize - self.params.message_size() - 1)) + 1)
+                >> 1)
+                % (1 << self.params.message_size());
         }
 
         let mut result: usize = 0;
@@ -251,6 +280,10 @@ impl OperationManager {
     pub fn execute(&mut self) {
         for step in &self.execution_plan {
             let op = &self.operations[step.op_index];
+            let is_both_cipher = match op.op_type {
+                OperandType::BothCipher => true,
+                _ => false,
+            };
             // 取输入
             let lwe_iter = match op.op_type {
                 OperandType::BothCipher => self.lwe_lists[step.input_indices[0]]
@@ -264,10 +297,18 @@ impl OperationManager {
                         .chain([].iter()) // 空迭代器，保证类型一致
                 }
             };
+
+            // for lwe in lwe_iter.clone(){
+            //     let t = decrypt_lwe_ciphertext(&self.glwe_sk.as_lwe_secret_key(),lwe);
+            //     println!("LWE Ciphertext: {:064b}", t.0);
+            // }
+
             let mut temp_ggsw_lists = self.ggsw_lists.clone();
             let iter = lwe_iter.zip(temp_ggsw_lists.iter_mut());
 
             for (lwe, mut ggsw) in iter {
+                // let t = decrypt_lwe_ciphertext(&self.glwe_sk.as_lwe_secret_key(), lwe);
+                // println!("LWE Ciphertext: {:05b}", t.0 >> 59);
                 circuit_bootstrapping_4_bits_at_once_rev_tr(
                     &lwe,
                     &mut ggsw,
@@ -279,7 +320,7 @@ impl OperationManager {
                 );
             }
 
-            let input_bits = concat_ggsw_lists(temp_ggsw_lists);
+            let input_bits = concat_ggsw_lists(temp_ggsw_lists, is_both_cipher);
 
             op.vertical_packing_multi_lookup(
                 self.lwe_lists[step.output_index].as_mut_slice(),
@@ -287,12 +328,18 @@ impl OperationManager {
                 &self.fft,
                 &mut self.buffer,
             );
+
+            // for lew in self.lwe_lists[step.output_index].iter() {
+            //     let t = decrypt_lwe_ciphertext(&self.glwe_sk.as_lwe_secret_key(),lew);
+            //     println!("Output LWE Ciphertext: {:064b}", t.0);
+            // }
         }
     }
 }
 
 pub fn concat_ggsw_lists(
     lists: Vec<FourierGgswCiphertextList<Vec<c64>>>,
+    is_both_cipher: bool,
 ) -> FourierGgswCiphertextList<Vec<c64>> {
     assert!(!lists.is_empty(), "GGSW list不能为空");
 
@@ -303,9 +350,18 @@ pub fn concat_ggsw_lists(
 
     let mut all_data = Vec::new();
     let mut total_count = 0;
-    for list in lists {
-        total_count += list.count();
-        all_data.extend_from_slice(&list.data()); // 此处 data() move 掉 list
+
+    if is_both_cipher {
+        for list in lists {
+            total_count += list.count();
+            all_data.extend_from_slice(&list.data()); // 此处 data() move 掉 list
+        }
+    }else{
+        let half = lists.len() / 2;
+        for list in lists.into_iter().take(half) {
+            total_count += list.count();
+            all_data.extend_from_slice(&list.data()); // 此处 data() move 掉 list
+        }
     }
 
     FourierGgswCiphertextList::new(

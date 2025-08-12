@@ -92,6 +92,13 @@ impl Operation {
             OperandType::PlainCipher => self.bit_width,
             OperandType::CipherPlain => self.bit_width,
         };
+        assert_eq!(
+            lut_input_size,
+            ggsw_list.count(),
+            "lut_input_size = {}, ggsw_list.count()={}",
+            lut_input_size,
+            ggsw_list.count()
+        );
         let lut = &self.cipher_lut[0];
         buffer.resize(
             vertical_packing_scratch::<u64>(
@@ -108,5 +115,6 @@ impl Operation {
         for (lut, lwe_out) in self.cipher_lut.iter().zip(lwe_outs.iter_mut()) {
             tfhe_vertical_packing_lookup(lut, lwe_out, ggsw_list, fft, buffer, lut_input_size);
         }
+        
     }
 }

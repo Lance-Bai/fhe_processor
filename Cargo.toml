@@ -32,3 +32,7 @@ replace-with = "vendored-sources"
 
 [source.vendored-sources]
 directory = "vendor"
+
+[[bench]]
+name = "manager_bench"   # 对应文件 benches/manager_bench.rs（去掉后缀）
+harness = false 
