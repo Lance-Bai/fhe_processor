@@ -20,6 +20,7 @@ stats = "0.0.1"
 epoch = "0.0.2"
 jemalloc-ctl = "0.5"
 jemallocator = "0.5"
+rayon = "1"
 
 [dev-dependencies]
 criterion = { version = "0.4", features = ["html_reports"] }

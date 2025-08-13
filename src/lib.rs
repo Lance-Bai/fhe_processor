@@ -118,7 +118,7 @@ mod circuit_bootstrapping_tests {
             key_gen::allocate_and_generate_new_reused_lwe_key,
             lwe_stored_ksk::allocate_and_generate_new_stored_reused_lwe_keyswitch_key,
         },
-        utils::instance::SetI,
+        utils::instance::{SetI, SetII},
     };
     use concrete_fft::c64;
     use rayon::vec;
@@ -441,7 +441,7 @@ mod circuit_bootstrapping_tests {
 
     #[test]
     fn manager_trial() {
-        let mut manager = OperationManager::new(*SetI, 10, 8);
+        let mut manager = OperationManager::new(*SetII, 10, 8);
         manager.add_operation(ArithmeticOp::Add, PlainCipher, Some(2));
         manager.add_operation(ArithmeticOp::Mul, BothCipher, None);
         manager.set_execution_plan(vec![Step::new(0, vec![0], 0), Step::new(1, vec![0, 1], 2)]);

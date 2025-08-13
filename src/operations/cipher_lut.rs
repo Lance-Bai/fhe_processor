@@ -1,7 +1,10 @@
 use tfhe::core_crypto::{
     fft_impl::fft64::{
         c64,
-        crypto::wop_pbs::{vertical_packing, vertical_packing_scratch},
+        crypto::wop_pbs::{
+            blind_rotate_assign, cmux_tree_memory_optimized, vertical_packing,
+            vertical_packing_scratch,
+        },
     },
     prelude::*,
 };
@@ -56,16 +59,93 @@ pub fn generate_lut_from_vecs(
         // 构造 PolynomialList，flat 按多项式顺序拼接
         let poly_list = PolynomialList::from_container(flat, polynomial_size);
         result.push(poly_list);
+    }
+    result
+}
 
-        // 可选调试输出
-        // #[cfg(test)]
-        // println!(
-        //     "Table #{table_idx}: length = {table_len}, packed into {num_poly} polys, poly_size = {}",
-        //     polynomial_size.0
-        // );
+pub fn generate_lut_from_vecs_auto(
+    tables: &[Vec<usize>],
+    polynomial_size: PolynomialSize,
+    delta: u64,
+) -> (Vec<PolynomialList<Vec<u64>>>, usize) {
+    assert!(!tables.is_empty(), "tables must not be empty");
+
+    let table_len = tables[0].len();
+    for t in tables.iter().skip(1) {
+        assert!(
+            t.len() == table_len,
+            "all tables must have the same length: expected {}, got {}",
+            table_len,
+            t.len()
+        );
     }
 
-    result
+    let n = polynomial_size.0;
+    let per_poly_capacity = n / table_len;
+
+    // =============== 情况 1：无法打包（一个表需要拆成多项式）===============
+    if per_poly_capacity < 1 {
+        let mut result = Vec::with_capacity(tables.len());
+
+        for table in tables {
+            let table_len = table.len();
+            let num_poly = (table_len + n - 1) / n;
+
+            let mut flat: Vec<u64> = Vec::with_capacity(num_poly * n);
+
+            for poly_idx in 0..num_poly {
+                for i in 0..n {
+                    let idx = poly_idx * n + i;
+                    let val = if idx < table_len {
+                        (table[idx] as u64) * delta
+                    } else {
+                        0
+                    };
+                    flat.push(val);
+                }
+            }
+
+            let poly_list = PolynomialList::from_container(flat, polynomial_size);
+            result.push(poly_list);
+        }
+
+        return (result, 1);
+    }
+
+    // ==================== 情况 2：可打包（一个 poly 放多张表） ====================
+    // 改动点：将每组打包（最多 per_poly_capacity 张表）生成一个独立的 PolynomialList，
+    // 且该 PolynomialList 里只含 1 个 poly（长度 = n）
+    let total_tables = tables.len();
+    let num_groups = (total_tables + per_poly_capacity - 1) / per_poly_capacity;
+
+    let mut result = Vec::with_capacity(num_groups);
+
+    for g in 0..num_groups {
+        // 为该组准备一个单-poly 的扁平存储（未占用处为 0）
+        let mut flat = vec![0u64; n];
+
+        // 本组中最多 per_poly_capacity 张表
+        for s in 0..per_poly_capacity {
+            let table_idx = g * per_poly_capacity + s;
+            if table_idx >= total_tables {
+                break;
+            }
+
+            // 将该表拷贝到本 poly 的对应分区 [s*table_len .. s*table_len + table_len)
+            let slot_base = s * table_len;
+            let table = &tables[table_idx];
+
+            for j in 0..table_len {
+                flat[slot_base + j] = (table[j] as u64) * delta;
+            }
+        }
+
+        let poly_list = PolynomialList::from_container(flat, polynomial_size);
+        // 注意：此时 poly_list 中只有 1 个多项式（因为 container 长度正好 = n）
+        result.push(poly_list);
+    }
+
+    (result, per_poly_capacity)
 }
 
 /// 单查找表的TFHE vertical_packing查值函数
@@ -129,7 +209,6 @@ pub fn tfhe_vertical_packing_multi_lookup(
     for (lut, lwe_out) in luts.iter().zip(lwe_outs.iter_mut()) {
         tfhe_vertical_packing_lookup(lut, lwe_out, ggsw_list, fft, buffer, lut_input_size);
     }
-    
 }
 
 #[cfg(test)]
@@ -189,5 +268,4 @@ mod tests {
             }
         }
     }
-
 }

@@ -2,6 +2,7 @@ use std::{collections::HashMap, ops::Shr};
 
 use aligned_vec::ABox;
 use concrete_fft::c64;
+use rayon::prelude::*;
 use refined_tfhe_lhe::{gen_all_auto_keys, generate_scheme_switching_key, AutomorphKey};
 use tfhe::{
     boolean::prelude::{DecompositionBaseLog, DecompositionLevelCount, PolynomialSize},
@@ -285,48 +286,97 @@ impl OperationManager {
                 _ => false,
             };
             // 取输入
-            let lwe_iter = match op.op_type {
-                OperandType::BothCipher => self.lwe_lists[step.input_indices[0]]
-                    .as_slice()
-                    .iter()
-                    .chain(self.lwe_lists[step.input_indices[1]].as_slice().iter()),
-                _ => {
-                    self.lwe_lists[step.input_indices[0]]
-                        .as_slice()
-                        .iter()
-                        .chain([].iter()) // 空迭代器，保证类型一致
-                }
-            };
+            // let lwe_iter = match op.op_type {
+            //     OperandType::BothCipher => self.lwe_lists[step.input_indices[0]]
+            //         .as_slice()
+            //         .iter()
+            //         .chain(self.lwe_lists[step.input_indices[1]].as_slice().iter()),
+            //     _ => {
+            //         self.lwe_lists[step.input_indices[0]]
+            //             .as_slice()
+            //             .iter()
+            //             .chain([].iter()) // 空迭代器，保证类型一致
+            //     }
+            // };
 
-            // for lwe in lwe_iter.clone(){
-            //     let t = decrypt_lwe_ciphertext(&self.glwe_sk.as_lwe_secret_key(),lwe);
-            //     println!("LWE Ciphertext: {:064b}", t.0);
+            // let mut temp_ggsw_lists = self.ggsw_lists.clone();
+            // let iter = lwe_iter.zip(temp_ggsw_lists.iter_mut());
+
+            // for (lwe, mut ggsw) in iter {
+            //     // let t = decrypt_lwe_ciphertext(&self.glwe_sk.as_lwe_secret_key(), lwe);
+            //     // println!("LWE Ciphertext: {:05b}", t.0 >> 59);
+            //     circuit_bootstrapping_4_bits_at_once_rev_tr(
+            //         &lwe,
+            //         &mut ggsw,
+            //         self.fourier_bsk.as_view(),
+            //         &self.auto_keys,
+            //         self.ss_key.as_view(),
+            //         &self.ksk,
+            //         &self.params,
+            //     );
             // }
 
-            let mut temp_ggsw_lists = self.ggsw_lists.clone();
-            let iter = lwe_iter.zip(temp_ggsw_lists.iter_mut());
+            let fourier_bsk_view = self.fourier_bsk.as_view();
+            let auto_keys = &self.auto_keys;
+            let ss_key_view = self.ss_key.as_view();
+            let ksk = &self.ksk;
+            let params = &self.params;
 
-            for (lwe, mut ggsw) in iter {
-                // let t = decrypt_lwe_ciphertext(&self.glwe_sk.as_lwe_secret_key(), lwe);
-                // println!("LWE Ciphertext: {:05b}", t.0 >> 59);
+            // 3) 取出参与的 LWE 切片
+            let lwe0 = self.lwe_lists[step.input_indices[0]].as_slice();
+            let lwe1_opt = match op.op_type {
+                OperandType::BothCipher => Some(self.lwe_lists[step.input_indices[1]].as_slice()),
+                _ => None,
+            };
+
+            // 4) 拿走 ggsw_lists 的所有权，避免 &mut self 的别名问题
+            //    （如果后面还要用回 self.ggsw_lists，最后再赋回）
+            let mut ggsw_lists = std::mem::take(&mut self.ggsw_lists);
+
+            // 5) 断言长度匹配：lwe 总数必须等于 ggsw 数
+            let total_lwe = lwe0.len() + lwe1_opt.map_or(0, |s| s.len());
+            // assert_eq!(ggsw_lists.len(), total_lwe, "LWE 数量与 GGSW 数量不一致");
+
+            // 6) 并行执行：按 ggsw 的索引 i 取对应的 lwe 引用
+            ggsw_lists.par_iter_mut().enumerate().take(total_lwe).for_each(|(i, ggsw)| {
+                // 选择第 i 个 LWE：可能来自第一个切片或第二个切片
+                let lwe = if i < lwe0.len() {
+                    &lwe0[i]
+                } else {
+                    // 安全：上面 total_lwe 已经匹配长度
+                    &lwe1_opt.unwrap()[i - lwe0.len()]
+                };
+
+                // 计算（每个线程只改它拿到的 ggsw；其余参数仅只读共享）
                 circuit_bootstrapping_4_bits_at_once_rev_tr(
-                    &lwe,
-                    &mut ggsw,
-                    self.fourier_bsk.as_view(),
-                    &self.auto_keys,
-                    self.ss_key.as_view(),
-                    &self.ksk,
-                    &self.params,
+                    lwe,
+                    ggsw, // 已是 &mut
+                    fourier_bsk_view,
+                    auto_keys,
+                    ss_key_view,
+                    ksk,
+                    params,
                 );
-            }
+            });
+
+            // 7) 放回 self（如果后续还要用）
+            let temp_ggsw_lists = ggsw_lists.clone();
+            self.ggsw_lists = ggsw_lists;
 
             let input_bits = concat_ggsw_lists(temp_ggsw_lists, is_both_cipher);
 
-            op.vertical_packing_multi_lookup(
+            // op.vertical_packing_multi_lookup(
+            //     self.lwe_lists[step.output_index].as_mut_slice(),
+            //     &input_bits,
+            //     &self.fft,
+            //     &mut self.buffer,
+            // );
+
+
+            op.parallel_vertical_packing_multi_lookup(
                 self.lwe_lists[step.output_index].as_mut_slice(),
                 &input_bits,
                 &self.fft,
-                &mut self.buffer,
             );
 
             // for lew in self.lwe_lists[step.output_index].iter() {
@@ -356,7 +406,7 @@ pub fn concat_ggsw_lists(
             total_count += list.count();
             all_data.extend_from_slice(&list.data()); // 此处 data() move 掉 list
         }
-    }else{
+    } else {
         let half = lists.len() / 2;
         for list in lists.into_iter().take(half) {
             total_count += list.count();
