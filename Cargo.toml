@@ -27,13 +27,12 @@ criterion = { version = "0.4", features = ["html_reports"] }
 concrete-fft = { version = "0.4.0", features = ["serde"] }
 rayon = "1"
 jemalloc-ctl = "0.5"
-
-[source.crates-io]
-replace-with = "vendored-sources"
-
-[source.vendored-sources]
-directory = "vendor"
+indicatif = "0.17"
 
 [[bench]]
-name = "manager_bench"   # 对应文件 benches/manager_bench.rs（去掉后缀）
+name = "manager_bench"   
+harness = false 
+
+[[bench]]
+name = "lut_bench"   
 harness = false 
