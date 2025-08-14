@@ -44,6 +44,8 @@ use tfhe::core_crypto::{
 // 按你的工程实际引入：
 // use crate::{vertical_packing_multi_lookup, LUTType, ...};
 
+const SAMPLE_SIZE: usize = 10;
+
 struct BenchCtx {
     // 运行时只读共享
     fourier_bsk: FourierLweBootstrapKeyOwned,
@@ -311,7 +313,6 @@ fn make_iter_setup(ctx: &BenchCtx, n_bits: usize) -> IterSetup {
     }
 }
 
-
 fn bench_lut_sizes(c: &mut Criterion) {
     let ctx = setup_ctx(*SetI); // 你的初始化
 
@@ -319,9 +320,16 @@ fn bench_lut_sizes(c: &mut Criterion) {
     let target_dir = env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".into());
     let logs_dir = format!("{}/bench_logs", target_dir);
     let _ = create_dir_all(&logs_dir);
-    let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-    let log_path = format!("{}/lut_combo_{}.log", logs_dir, ts);
-    let file = OpenOptions::new().create(true).append(true).open(&log_path).unwrap();
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let log_path = format!("{}/lut_combo_{}.csv", logs_dir, ts);
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .unwrap();
     let writer = Arc::new(Mutex::new(BufWriter::new(file)));
 
     // 写 CSV 表头
@@ -332,13 +340,13 @@ fn bench_lut_sizes(c: &mut Criterion) {
     }
 
     // ---------------- 进度条 ----------------
-    let n_vals = [4usize, 8, 12];
-    let thread_vals = [1usize, 2, 4, 8, 16];
-    let total_cases = (n_vals.len() * thread_vals.len()) as u64;
+    let n_vals = [4usize, 8, 12, 16];
+    let thread_vals = [1usize, 2, 4];
+    let total_cases = (n_vals.len() * thread_vals.len() * SAMPLE_SIZE) as u64;
     let pb = Arc::new(ProgressBar::new(total_cases));
     pb.set_style(
         ProgressStyle::with_template(
-            "[{elapsed_precise}] [{bar:40}] {pos}/{len} {msg} (eta {eta})"
+            "[{elapsed_precise}] [{bar:40}] {pos}/{len} {msg} (eta {eta})",
         )
         .unwrap()
         .progress_chars("=>-"),
@@ -348,7 +356,6 @@ fn bench_lut_sizes(c: &mut Criterion) {
 
     for &n_bits in &n_vals {
         for &threads in &thread_vals {
-            let pb = pb.clone();
             let writer = writer.clone();
 
             group.bench_with_input(
@@ -363,8 +370,8 @@ fn bench_lut_sizes(c: &mut Criterion) {
                             .unwrap();
 
                         let mut sum_total = Duration::ZERO;
-                        let mut sum_cbs   = Duration::ZERO;
-                        let mut sum_lut   = Duration::ZERO;
+                        let mut sum_cbs = Duration::ZERO;
+                        let mut sum_lut = Duration::ZERO;
 
                         for _ in 0..iters {
                             // 不计时：一次迭代的准备（加密若干 LWE、trivial LUT、预分配容器等）
@@ -384,8 +391,8 @@ fn bench_lut_sizes(c: &mut Criterion) {
                             });
                             let dt_lut = t1.elapsed();
 
-                            sum_cbs   += dt_cbs;
-                            sum_lut   += dt_lut;
+                            sum_cbs += dt_cbs;
+                            sum_lut += dt_lut;
                             sum_total += dt_cbs + dt_lut;
 
                             black_box(&prep); // 防优化
@@ -393,8 +400,8 @@ fn bench_lut_sizes(c: &mut Criterion) {
 
                         // 平均值（毫秒）
                         let iters_f = iters as f64;
-                        let avg_cbs_ms   = (sum_cbs.as_secs_f64()   * 1e3) / iters_f;
-                        let avg_lut_ms   = (sum_lut.as_secs_f64()   * 1e3) / iters_f;
+                        let avg_cbs_ms = (sum_cbs.as_secs_f64() * 1e3) / iters_f;
+                        let avg_lut_ms = (sum_lut.as_secs_f64() * 1e3) / iters_f;
                         let avg_total_ms = (sum_total.as_secs_f64() * 1e3) / iters_f;
 
                         // 写入日志（CSV）
@@ -407,11 +414,9 @@ fn bench_lut_sizes(c: &mut Criterion) {
                             );
                             let _ = w.flush();
                         }
-
                         // 进度条前进一格（每个 n_bits×threads 组合完成一次测量时）
-                        pb.set_message(format!("n_bits={nb} threads={threads}"));
+                        pb.set_message(format!("n_bits={n_bits} threads={threads}"));
                         pb.inc(1);
-
                         // 返回 total 给 Criterion 用于曲线/统计
                         sum_total
                     });
@@ -426,7 +431,7 @@ fn bench_lut_sizes(c: &mut Criterion) {
 
 fn small_runs() -> Criterion {
     Criterion::default()
-        .sample_size(10) // 改这里
+        .sample_size(SAMPLE_SIZE) // 改这里
         .warm_up_time(Duration::from_secs(1))
         .measurement_time(Duration::from_secs(100))
         .configure_from_args() // 允许命令行再覆盖
