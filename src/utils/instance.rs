@@ -4,36 +4,6 @@ use lazy_static::lazy_static;
 use tfhe::core_crypto::prelude::*;
 
 lazy_static! {
-    pub static ref Processor_4_bits: ProcessorParam<u64> = ProcessorParam::new(
-        LweDimension(873), // lwe_dimension
-        StandardDev(0.0000006428797112843789), // lwe_modular_std_dev
-        PolynomialSize(2048), // polynomial_size
-        GlweDimension(1), // glwe_dimension
-        GlweDimension(2), // large_glwe_dimension
-        StandardDev(0.00000000000000029403601535432533), // glwe_modular_std_dev
-        StandardDev(0.0000000000000000002168404344971009), // large_glwe_modular_std_dev
-        DecompositionBaseLog(11), // pbs_base_log
-        DecompositionLevelCount(3), // pbs_level
-        DecompositionBaseLog(7), // ks_base_log
-        DecompositionLevelCount(2), // ks_level
-        DecompositionBaseLog(15), // glwe_ds_to_large_base_log
-        DecompositionLevelCount(3), // glwe_ds_to_large_level
-        FftType::Split(44), // fft_type_to_large
-        DecompositionBaseLog(12), // auto_base_log
-        DecompositionLevelCount(4), // auto_level
-        FftType::Split(41), // fft_type_auto
-        DecompositionBaseLog(13), // glwe_ds_from_large_base_log
-        DecompositionLevelCount(3), // glwe_ds_from_large_level
-        FftType::Split(42), // fft_type_from_large
-        DecompositionBaseLog(10), // ss_base_log
-        DecompositionLevelCount(4), // ss_level
-        DecompositionBaseLog(5), // cbs_base_log
-        DecompositionLevelCount(4), // cbs_level
-        LutCountLog(2), // log_lut_count
-        CiphertextModulus::<u64>::new_native(), // ciphertext_modulus
-        4, // message_size
-        4,
-    );
 
     pub static ref ZeroNoiseTest: ProcessorParam<u64> = ProcessorParam::new(
         LweDimension(873), // lwe_dimension
@@ -95,6 +65,70 @@ lazy_static! {
         4, // message_size
         4,
     );
+
+    pub static ref SetI_small: ProcessorParam<u64> = ProcessorParam::new(
+        LweDimension(710), // lwe_dimension
+        StandardDev(2.09820e-5), // lwe_modular_std_dev
+        PolynomialSize(2048), // polynomial_size
+        GlweDimension(1), // glwe_dimension
+        GlweDimension(0), // large_glwe_dimension
+        StandardDev(2.94036e-16), // glwe_modular_std_dev
+        StandardDev(0.000000000000000000000000000000000000000000000000000000001), // large_glwe_modular_std_dev
+        DecompositionBaseLog(15), // pbs_base_log
+        DecompositionLevelCount(2), // pbs_level
+        DecompositionBaseLog(4), // ks_base_log
+        DecompositionLevelCount(4), // ks_level
+        DecompositionBaseLog(1), // glwe_ds_to_large_base_log
+        DecompositionLevelCount(1), // glwe_ds_to_large_level
+        FftType::Split(38), // fft_type_to_large
+        DecompositionBaseLog(17), // auto_base_log
+        DecompositionLevelCount(2), // auto_level
+        FftType::Split(38), // fft_type_auto
+        DecompositionBaseLog(13), // glwe_ds_from_large_base_log
+        DecompositionLevelCount(3), // glwe_ds_from_large_level
+        FftType::Split(38), // fft_type_from_large
+        DecompositionBaseLog(17), // ss_base_log
+        DecompositionLevelCount(2), // ss_level
+        DecompositionBaseLog(4), // cbs_base_log
+        DecompositionLevelCount(4), // cbs_level
+        LutCountLog(2), // log_lut_count
+        CiphertextModulus::<u64>::new_native(), // ciphertext_modulus
+        4, // message_size
+        4,
+    );
+
+        pub static ref SetI_large: ProcessorParam<u64> = ProcessorParam::new(
+        LweDimension(710), // lwe_dimension
+        StandardDev(2.09820e-5), // lwe_modular_std_dev
+        PolynomialSize(1024), // polynomial_size
+        GlweDimension(2), // glwe_dimension
+        GlweDimension(0), // large_glwe_dimension
+        StandardDev(2.94036e-16), // glwe_modular_std_dev
+        StandardDev(0.000000000000000000000000000000000000000000000000000000001), // large_glwe_modular_std_dev
+        DecompositionBaseLog(5), // pbs_base_log
+        DecompositionLevelCount(9), // pbs_level
+        DecompositionBaseLog(4), // ks_base_log
+        DecompositionLevelCount(4), // ks_level
+        DecompositionBaseLog(1), // glwe_ds_to_large_base_log
+        DecompositionLevelCount(1), // glwe_ds_to_large_level
+        FftType::Split(38), // fft_type_to_large
+        DecompositionBaseLog(4), // auto_base_log
+        DecompositionLevelCount(12), // auto_level
+        FftType::Split(38), // fft_type_auto
+        DecompositionBaseLog(13), // glwe_ds_from_large_base_log
+        DecompositionLevelCount(3), // glwe_ds_from_large_level
+        FftType::Split(38), // fft_type_from_large
+        DecompositionBaseLog(8), // ss_base_log
+        DecompositionLevelCount(6), // ss_level
+        DecompositionBaseLog(16), // cbs_base_log
+        DecompositionLevelCount(1), // cbs_level
+        LutCountLog(0), // log_lut_count
+        CiphertextModulus::<u64>::new_native(), // ciphertext_modulus
+        4, // message_size
+        4,
+    );
+
+
         pub static ref SetII: ProcessorParam<u64> = ProcessorParam::new(
         LweDimension(710), // lwe_dimension
         StandardDev(2.09820e-5), // lwe_modular_std_dev

@@ -1,6 +1,6 @@
 use aligned_vec::{ABox, ConstAlign};
 use refined_tfhe_lhe::{AutomorphKey, FourierGlweKeyswitchKey};
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 use tfhe::core_crypto::{
     fft_impl::fft64::{c64, crypto::bootstrap::FourierLweBootstrapKeyView},
     prelude::*,
@@ -152,13 +152,14 @@ pub fn circuit_bootstrapping_4_bits_at_once_rev_tr<Scalar, InputCont>(
 
     ///////////////////////////////////////////////////////////////////
     stored_reused_keyswitch_lwe_ciphertext(&ksk, &input, &mut small_lwe);
+    // let pbs_start = Instant::now();
     let (mask, body) = fast_low_noise_pbs_modulus_switch(
         &small_lwe,
         parms.polynomial_size(),
         ModulusSwitchOffset(0),
         parms.log_lut_count(),
     );
-
+    
     pbs_many_lut_after_ms_before_extract(
         &body,
         &mask,
@@ -170,6 +171,9 @@ pub fn circuit_bootstrapping_4_bits_at_once_rev_tr<Scalar, InputCont>(
         num_extracts,
         ciphertext_modulus,
     );
+    // println!("pbs time: {:.3?}", pbs_start.elapsed());
+    
+
     let mut ggsw_temp = GgswCiphertext::new(
         Scalar::ZERO,
         glwe_size,
@@ -178,6 +182,7 @@ pub fn circuit_bootstrapping_4_bits_at_once_rev_tr<Scalar, InputCont>(
         cbs_level,
         ciphertext_modulus,
     );
+    // let ss_start = Instant::now();
     for (i, mut fourier_ggsw) in output.as_mut_view().into_ggsw_iter().enumerate() {
         convert_to_ggsw_after_blind_rotate_4_bit_rev_tr(
             &acc_glev,
@@ -189,4 +194,5 @@ pub fn circuit_bootstrapping_4_bits_at_once_rev_tr<Scalar, InputCont>(
         );
         convert_standard_ggsw_ciphertext_to_fourier(&ggsw_temp, &mut fourier_ggsw);
     }
+    // println!("ss time: {:.3?}", ss_start.elapsed());
 }

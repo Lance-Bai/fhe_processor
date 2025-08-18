@@ -18,6 +18,7 @@ use fhe_processor::processors::key_gen::allocate_and_generate_new_reused_lwe_key
 use fhe_processor::processors::lwe_stored_ksk::{
     allocate_and_generate_new_stored_reused_lwe_keyswitch_key, LweStoredReusedKeyswitchKey,
 };
+use fhe_processor::utils::instance::{SetI_large, SetI_small};
 use fhe_processor::{utils::instance::SetI, utils::parms::ProcessorParam};
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::iter::{
@@ -314,7 +315,7 @@ fn make_iter_setup(ctx: &BenchCtx, n_bits: usize) -> IterSetup {
 }
 
 fn bench_lut_sizes(c: &mut Criterion) {
-    let ctx = setup_ctx(*SetI); // 你的初始化
+    let ctx = setup_ctx(*SetI_large); // 你的初始化
 
     // ---------------- 日志文件（CSV） ----------------
     let target_dir = env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".into());
@@ -340,8 +341,8 @@ fn bench_lut_sizes(c: &mut Criterion) {
     }
 
     // ---------------- 进度条 ----------------
-    let n_vals = [4usize, 8, 12, 16];
-    let thread_vals = [1usize, 2, 4];
+    let n_vals = [24];
+    let thread_vals = [1, ];
     let total_cases = (n_vals.len() * thread_vals.len() * SAMPLE_SIZE) as u64;
     let pb = Arc::new(ProgressBar::new(total_cases));
     pb.set_style(
@@ -363,6 +364,10 @@ fn bench_lut_sizes(c: &mut Criterion) {
                 &n_bits,
                 |b, &nb| {
                     b.iter_custom(|iters| {
+                        println!(
+                            "Running n_bits={} with {} threads for {} iterations",
+                            nb, threads, iters
+                        );
                         // 局部 Rayon 线程池（不计时）
                         let pool = ThreadPoolBuilder::new()
                             .num_threads(threads)
@@ -433,7 +438,7 @@ fn small_runs() -> Criterion {
     Criterion::default()
         .sample_size(SAMPLE_SIZE) // 改这里
         .warm_up_time(Duration::from_secs(1))
-        .measurement_time(Duration::from_secs(100))
+        .measurement_time(Duration::from_secs(60))
         .configure_from_args() // 允许命令行再覆盖
 }
 criterion_group! {
