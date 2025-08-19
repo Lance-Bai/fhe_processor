@@ -226,6 +226,15 @@ impl OperationManager {
         self.operations.push(operand);
     }
 
+    pub fn add_operatoins(
+        &mut self,
+        ops: Vec<(ArithmeticOp, OperandType, Option<usize>)>,
+    ) {
+        for (op, op_type, immediate) in ops {
+            self.add_operation(op, op_type, immediate);
+        }
+    }
+
     pub fn remove_operation(&mut self, index: usize) {
         self.operations.remove(index);
     }
@@ -285,36 +294,18 @@ impl OperationManager {
                 OperandType::BothCipher => true,
                 _ => false,
             };
-            // 取输入
-            // let lwe_iter = match op.op_type {
-            //     OperandType::BothCipher => self.lwe_lists[step.input_indices[0]]
-            //         .as_slice()
-            //         .iter()
-            //         .chain(self.lwe_lists[step.input_indices[1]].as_slice().iter()),
-            //     _ => {
-            //         self.lwe_lists[step.input_indices[0]]
-            //             .as_slice()
-            //             .iter()
-            //             .chain([].iter()) // 空迭代器，保证类型一致
-            //     }
-            // };
 
-            // let mut temp_ggsw_lists = self.ggsw_lists.clone();
-            // let iter = lwe_iter.zip(temp_ggsw_lists.iter_mut());
-
-            // for (lwe, mut ggsw) in iter {
-            //     // let t = decrypt_lwe_ciphertext(&self.glwe_sk.as_lwe_secret_key(), lwe);
-            //     // println!("LWE Ciphertext: {:05b}", t.0 >> 59);
-            //     circuit_bootstrapping_4_bits_at_once_rev_tr(
-            //         &lwe,
-            //         &mut ggsw,
-            //         self.fourier_bsk.as_view(),
-            //         &self.auto_keys,
-            //         self.ss_key.as_view(),
-            //         &self.ksk,
-            //         &self.params,
-            //     );
-            // }
+            if op.op == ArithmeticOp::MOVE {
+                // MOVE 操作直接从输入 LWE 列表复制到输出
+                let temp = self.lwe_lists[step.input_indices[0]].clone();
+                for (input, output) in temp
+                    .iter()
+                    .zip(self.lwe_lists[step.output_index].iter_mut())
+                {
+                    output.clone_from(input);
+                }
+                continue;
+            }
 
             let fourier_bsk_view = self.fourier_bsk.as_view();
             let auto_keys = &self.auto_keys;
@@ -338,26 +329,30 @@ impl OperationManager {
             // assert_eq!(ggsw_lists.len(), total_lwe, "LWE 数量与 GGSW 数量不一致");
 
             // 6) 并行执行：按 ggsw 的索引 i 取对应的 lwe 引用
-            ggsw_lists.par_iter_mut().enumerate().take(total_lwe).for_each(|(i, ggsw)| {
-                // 选择第 i 个 LWE：可能来自第一个切片或第二个切片
-                let lwe = if i < lwe0.len() {
-                    &lwe0[i]
-                } else {
-                    // 安全：上面 total_lwe 已经匹配长度
-                    &lwe1_opt.unwrap()[i - lwe0.len()]
-                };
+            ggsw_lists
+                .par_iter_mut()
+                .enumerate()
+                .take(total_lwe)
+                .for_each(|(i, ggsw)| {
+                    // 选择第 i 个 LWE：可能来自第一个切片或第二个切片
+                    let lwe = if i < lwe0.len() {
+                        &lwe0[i]
+                    } else {
+                        // 安全：上面 total_lwe 已经匹配长度
+                        &lwe1_opt.unwrap()[i - lwe0.len()]
+                    };
 
-                // 计算（每个线程只改它拿到的 ggsw；其余参数仅只读共享）
-                circuit_bootstrapping_4_bits_at_once_rev_tr(
-                    lwe,
-                    ggsw, // 已是 &mut
-                    fourier_bsk_view,
-                    auto_keys,
-                    ss_key_view,
-                    ksk,
-                    params,
-                );
-            });
+                    // 计算（每个线程只改它拿到的 ggsw；其余参数仅只读共享）
+                    circuit_bootstrapping_4_bits_at_once_rev_tr(
+                        lwe,
+                        ggsw, // 已是 &mut
+                        fourier_bsk_view,
+                        auto_keys,
+                        ss_key_view,
+                        ksk,
+                        params,
+                    );
+                });
 
             // 7) 放回 self（如果后续还要用）
             let temp_ggsw_lists = ggsw_lists.clone();
@@ -371,7 +366,6 @@ impl OperationManager {
             //     &self.fft,
             //     &mut self.buffer,
             // );
-
 
             op.parallel_vertical_packing_multi_lookup(
                 self.lwe_lists[step.output_index].as_mut_slice(),

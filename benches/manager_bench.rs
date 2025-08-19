@@ -74,7 +74,7 @@ fn small_runs() -> Criterion {
     Criterion::default()
         .sample_size(10) // 改这里
         .warm_up_time(Duration::from_secs(1))
-        .measurement_time(Duration::from_secs(100))
+        .measurement_time(Duration::from_secs(60))
         .configure_from_args() // 允许命令行再覆盖
 }
 criterion_group! {

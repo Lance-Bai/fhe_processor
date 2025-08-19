@@ -315,7 +315,7 @@ fn make_iter_setup(ctx: &BenchCtx, n_bits: usize) -> IterSetup {
 }
 
 fn bench_lut_sizes(c: &mut Criterion) {
-    let ctx = setup_ctx(*SetI_large); // 你的初始化
+    let ctx = setup_ctx(*SetI); // 你的初始化
 
     // ---------------- 日志文件（CSV） ----------------
     let target_dir = env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".into());
@@ -325,7 +325,7 @@ fn bench_lut_sizes(c: &mut Criterion) {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    let log_path = format!("{}/lut_combo_{}.csv", logs_dir, ts);
+    let log_path = format!("{}/lut_combo_large_{}.csv", logs_dir, ts);
     let file = OpenOptions::new()
         .create(true)
         .append(true)
@@ -341,8 +341,8 @@ fn bench_lut_sizes(c: &mut Criterion) {
     }
 
     // ---------------- 进度条 ----------------
-    let n_vals = [24];
-    let thread_vals = [1, ];
+    let n_vals = [4, 8, 12, 16, 20, 24];
+    let thread_vals = [1];
     let total_cases = (n_vals.len() * thread_vals.len() * SAMPLE_SIZE) as u64;
     let pb = Arc::new(ProgressBar::new(total_cases));
     pb.set_style(

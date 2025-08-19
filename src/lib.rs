@@ -2,8 +2,8 @@
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 pub mod operations;
 pub mod processors;
+pub mod programs;
 pub mod utils;
-
 #[cfg(test)]
 mod keyswitch_tests {
     use super::*;
@@ -454,5 +454,128 @@ mod circuit_bootstrapping_tests {
 
             println!("({}+2)*{}={}", i, i + 3, result);
         }
+    }
+}
+
+#[cfg(test)]
+mod manager_tests {
+    use std::time::Instant;
+
+    use tfhe::core_crypto::prelude::CastInto;
+
+    use super::*;
+    use crate::{
+        operations::{manager::OperationManager, operand::ArithmeticOp, operation::OperandType},
+        programs::{
+            average::Average_Program, bubble::Bubble_Program, maximum::Maximum_Program,
+            squaresum::Squaresum_Program,
+        },
+        utils::instance::SetI,
+    };
+    const sample_size: usize = 10;
+    #[test]
+    fn test_manager_maximum() {
+        let size = 5_usize;
+        let mut manager = OperationManager::new(*SetI, size + 1, 8);
+        manager.add_operatoins(Maximum_Program::load_operatonis());
+        manager.set_execution_plan(Maximum_Program::load_programs(size));
+
+        manager.load_data(16, 0);
+        manager.load_data(4, 1);
+        manager.load_data(0, 2);
+        manager.load_data(9, 3);
+        manager.load_data(5, 4);
+        let t = Instant::now();
+        for _ in 0..sample_size {
+            manager.execute();
+        }
+
+        println!(
+            "Execution time: {:.3?}",
+            t.elapsed() / sample_size.cast_into()
+        );
+        let result = manager.get_data(size);
+        println!("buf[{}] = {}", size, result);
+    }
+
+    #[test]
+    fn test_manager_bubble() {
+        let size = 5_usize;
+        let mut manager = OperationManager::new(*SetI, size + 1, 8);
+        manager.add_operatoins(Bubble_Program::load_operatonis());
+        manager.set_execution_plan(Bubble_Program::load_programs(size));
+
+        manager.load_data(16, 0);
+        manager.load_data(4, 1);
+        manager.load_data(0, 2);
+        manager.load_data(9, 3);
+        manager.load_data(5, 4);
+        let t = Instant::now();
+        for _ in 0..sample_size {
+            manager.execute();
+        }
+
+        println!(
+            "Execution time: {:.3?}",
+            t.elapsed() / sample_size.cast_into()
+        );
+        for i in 0..size {
+            let result = manager.get_data(i);
+            println!("buf[{}] = {}", i, result);
+        }
+    }
+
+    #[test]
+    fn test_manager_squaresum() {
+        let size = 5_usize;
+        let mut manager = OperationManager::new(*SetI, size + 2, 8);
+        manager.add_operatoins(Squaresum_Program::load_operatonis());
+        manager.set_execution_plan(Squaresum_Program::load_programs(size));
+
+        manager.load_data(2, 0);
+        manager.load_data(4, 1);
+        manager.load_data(0, 2);
+        manager.load_data(9, 3);
+        manager.load_data(5, 4);
+
+        let t = Instant::now();
+        for _ in 0..sample_size {
+            manager.load_data(0, size + 1); // buf[size] = 0
+            manager.execute();
+        }
+
+        println!(
+            "Execution time: {:.3?}",
+            t.elapsed() / sample_size.cast_into()
+        );
+        let result = manager.get_data(size + 1);
+        println!("buf[{}] = {}", size + 1, result);
+    }
+
+    #[test]
+    fn test_manager_average() {
+        let size = 5_usize;
+        let mut manager = OperationManager::new(*SetI, size + 1, 8);
+        manager.add_operatoins(Average_Program::load_operatonis(size));
+        manager.set_execution_plan(Average_Program::load_programs(size));
+
+        manager.load_data(2, 0);
+        manager.load_data(4, 1);
+        manager.load_data(0, 2);
+        manager.load_data(9, 3);
+        manager.load_data(5, 4);
+
+        let t = Instant::now();
+        for _ in 0..sample_size {
+            manager.load_data(0, size); // buf[size] = 0
+            manager.execute();
+        }
+
+        println!(
+            "Execution time: {:.3?}",
+            t.elapsed() / sample_size.cast_into()
+        );
+        let result = manager.get_data(size);
+        println!("buf[{}] = {}", size + 1, result);
     }
 }

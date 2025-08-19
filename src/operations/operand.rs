@@ -17,7 +17,7 @@ pub enum ArithmeticOp {
     LT,
     GTE,
     LTE,
-    MXA,
+    MAX,
     MIN,
     RL,
     RR,
@@ -28,6 +28,7 @@ pub enum ArithmeticOp {
     XOR,
     NAND,
     NOT,
+    MOVE,
 }
 
 impl ArithmeticOp {
@@ -107,7 +108,7 @@ impl ArithmeticOp {
                     T::zero()
                 }
             }
-            ArithmeticOp::MXA => max(b, a),
+            ArithmeticOp::MAX => max(b, a),
             ArithmeticOp::MIN => min(b, a),
             ArithmeticOp::RL => a.rotate_left(b.to_u32().unwrap()),
             ArithmeticOp::RR => a.rotate_right(b.to_u32().unwrap()),
@@ -122,6 +123,7 @@ impl ArithmeticOp {
             ArithmeticOp::XOR => a ^ b,
             ArithmeticOp::NAND => !(a & b),
             ArithmeticOp::NOT => !a,
+            ArithmeticOp::MOVE => a,
         }
     }
 

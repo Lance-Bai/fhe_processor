@@ -10,7 +10,10 @@ use aligned_vec::CACHELINE_ALIGN;
 use concrete_fft::c64;
 use dyn_stack::{PodStack, ReborrowMut};
 use itertools::Itertools;
-use rayon::{iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator}, slice::ParallelSliceMut};
+use rayon::{
+    iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator},
+    slice::ParallelSliceMut,
+};
 use tfhe::core_crypto::prelude::{
     ComputationBuffers, Fft, FourierGgswCiphertextList, LweCiphertext, PolynomialList,
 };
@@ -50,34 +53,46 @@ impl Operation {
         delta: u64,
         immediate: Option<usize>,
     ) -> Self {
-        let plain_lut = match op_type {
-            OperandType::BothCipher => {
-                build_split_lut_tables(bit_width, vec![bit_width, bit_width], chunk_size, &op)
+        if op == ArithmeticOp::MOVE {
+            Self {
+                op,
+                op_type,
+                bit_width,
+                chunk_size,
+                cipher_lut: Vec::new(), // MOVE 操作没有查找表
+                lut_pack_size: 0,
             }
-            OperandType::PlainCipher => build_split_lut_tables_plain_cipher(
-                bit_width,
-                immediate.unwrap(),
-                vec![bit_width],
-                chunk_size,
-                &op,
-            ),
-            OperandType::CipherPlain => build_split_lut_tables_cipher_plain(
-                bit_width,
-                immediate.unwrap(),
-                vec![bit_width],
-                chunk_size,
-                &op,
-            ),
-        };
+        } else {
+            let plain_lut = match op_type {
+                OperandType::BothCipher => {
+                    build_split_lut_tables(bit_width, vec![bit_width, bit_width], chunk_size, &op)
+                }
+                OperandType::PlainCipher => build_split_lut_tables_plain_cipher(
+                    bit_width,
+                    immediate.unwrap(),
+                    vec![bit_width],
+                    chunk_size,
+                    &op,
+                ),
+                OperandType::CipherPlain => build_split_lut_tables_cipher_plain(
+                    bit_width,
+                    immediate.unwrap(),
+                    vec![bit_width],
+                    chunk_size,
+                    &op,
+                ),
+            };
 
-        let (cipher_lut, lut_pack_size) = generate_lut_from_vecs_auto(&plain_lut, poly_size, delta);
-        Self {
-            op,
-            op_type,
-            bit_width,
-            chunk_size,
-            cipher_lut,
-            lut_pack_size,
+            let (cipher_lut, lut_pack_size) =
+                generate_lut_from_vecs_auto(&plain_lut, poly_size, delta);
+            Self {
+                op,
+                op_type,
+                bit_width,
+                chunk_size,
+                cipher_lut,
+                lut_pack_size,
+            }
         }
     }
 
