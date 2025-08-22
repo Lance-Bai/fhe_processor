@@ -44,3 +44,7 @@ harness = false
 [[bench]]
 name = "program_bench"   
 harness = false 
+
+[[bench]]
+name = "all_op_bench"   
+harness = false 
