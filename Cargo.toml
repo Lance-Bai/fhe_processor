@@ -36,3 +36,11 @@ harness = false
 [[bench]]
 name = "lut_bench"   
 harness = false 
+
+[[bench]]
+name = "large_op_bench"   
+harness = false 
+
+[[bench]]
+name = "program_bench"   
+harness = false 

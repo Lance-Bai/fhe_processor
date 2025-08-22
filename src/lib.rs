@@ -592,7 +592,7 @@ mod manager_tests {
     fn test_manager_large_compare() {
         let size = 2_usize;
         let mut manager = OperationManager::new(*ZeroNoiseTestII, size + 1, 16);
-        manager.add_operation(ArithmeticOp::GTE, OperandType::BothCipher, None);
+        manager.add_operation(ArithmeticOp::LT, OperandType::BothCipher, None);
         manager.set_execution_plan(vec![Step::new(0, vec![0, 1], size)]);
         let mut rng = rand::thread_rng();
         let mut count = 0;
@@ -602,7 +602,7 @@ mod manager_tests {
             let b: u32 = rng.gen();
             let a = a % 65536;
             let b = b % 65536;
-            let true_result: usize = if a >= b { 1 } else { 0 };
+            let true_result: usize = if a < b { 1 } else { 0 };
             // println!("a={:032b},b={:032b}", a, b);
             manager.load_data(a.cast_into(), 0);
             manager.load_data(b.cast_into(), 1);
@@ -637,6 +637,39 @@ mod manager_tests {
         );
     }
 
-   
-}
+    #[test]
+    fn test_manager_large_compare_pc() {
+        let size = 1_usize;
+        let b = 500_usize;
+        let mut manager = OperationManager::new(*ZeroNoiseTestII, size + 1, 16);
+        manager.add_operation(ArithmeticOp::GT, OperandType::CipherPlain, Some(b));
+        manager.set_execution_plan(vec![Step::new(0, vec![0], size)]);
+        let mut rng = rand::thread_rng();
+        let mut count = 0;
+        let t = Instant::now();
+        for _ in 0..sample_size {
+            let a: u32 = rng.gen();
+            let a = a % 65536;
+            let true_result: usize = if a > b.cast_into() { 1 } else { 0 };
+            // println!("a={:032b},b={:032b}", a, b);
+            manager.load_data(a.cast_into(), 0);
+            manager.execute();
+            let result = manager.get_data(size);
 
+            if result == true_result {
+                count = count + 1;
+            } else {
+                println!("a={:016b},b={:016b}", a, b);
+                println!(" buf[{}] = {} ==? {}", size + 1, result, true_result);
+            }
+        }
+        println!(
+            "accuracy: {:.3?}",
+            count.to_f64().unwrap() / sample_size.to_f64().unwrap()
+        );
+        println!(
+            "Execution time: {:.3?}",
+            t.elapsed() / sample_size.cast_into()
+        );
+    }
+}

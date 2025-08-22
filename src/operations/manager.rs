@@ -21,7 +21,9 @@ use crate::{
         operand::ArithmeticOp,
         operation::{OperandType, Operation},
     },
-    opmized_operations::Compare::opmized_compare,
+    opmized_operations::Compare::{
+        opmized_compare_bothcipher, opmized_compare_cipherplain, opmized_compare_plaincipher,
+    },
     processors::{
         cbs_4_bits::circuit_bootstrapping_4_bits_at_once_rev_tr,
         key_gen::allocate_and_generate_new_reused_lwe_key,
@@ -361,17 +363,41 @@ impl OperationManager {
 
                     self.ggsw_lists = ggsw_lists;
                     let temp = self.ggsw_lists.clone();
-                    let (temp0, temp1) = temp.split_at(self.ggsw_lists.len() / 2);
-                    let input0 = concat_ggsw_lists(temp0.to_vec(), true);
-                    let input1 = concat_ggsw_lists(temp1.to_vec(), true);
-                    let input = vec![input0, input1];
+                    match op.op_type {
+                        OperandType::BothCipher => {
+                            let (temp0, temp1) = temp.split_at(self.ggsw_lists.len() / 2);
+                            let input0 = concat_ggsw_lists(temp0.to_vec(), true);
+                            let input1 = concat_ggsw_lists(temp1.to_vec(), true);
+                            let input = vec![input0, input1];
 
-                    opmized_compare(
-                        &input,
-                        self.lwe_lists[step.output_index].as_mut_slice(),
-                        op.op,
-                        &self.fft,
-                    );
+                            opmized_compare_bothcipher(
+                                &input,
+                                self.lwe_lists[step.output_index].as_mut_slice(),
+                                op.op,
+                                &self.fft,
+                            );
+                        }
+                        OperandType::CipherPlain => {
+                            let input = concat_ggsw_lists(temp, false);
+                            opmized_compare_cipherplain(
+                                &input,
+                                self.lwe_lists[step.output_index].as_mut_slice(),
+                                op.op,
+                                op.immediate.unwrap(),
+                                &self.fft,
+                            );
+                        }
+                        OperandType::PlainCipher => {
+                            let input = concat_ggsw_lists(temp, false);
+                            opmized_compare_plaincipher(
+                                &input,
+                                self.lwe_lists[step.output_index].as_mut_slice(),
+                                op.op,
+                                op.immediate.unwrap(),
+                                &self.fft,
+                            );
+                        }
+                    }
                 }
 
                 _ => {
@@ -437,7 +463,6 @@ impl OperationManager {
                     );
                 }
             }
-
         }
     }
 }

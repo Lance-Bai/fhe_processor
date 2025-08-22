@@ -40,6 +40,7 @@ pub struct Operation {
     // 只存密文查找表
     pub cipher_lut: Vec<PolynomialList<Vec<u64>>>,
     pub lut_pack_size: usize, // 每个多项式能打包多少张表
+    pub immediate: Option<usize>
 }
 
 impl Operation {
@@ -60,6 +61,7 @@ impl Operation {
                 chunk_size,
                 cipher_lut: Vec::new(), // MOVE 操作没有查找表
                 lut_pack_size: 0,
+                immediate,
             }
         } else if matches!(
             op,
@@ -77,6 +79,7 @@ impl Operation {
                 chunk_size,
                 cipher_lut: Vec::new(), // opmised compare 操作没有查找表
                 lut_pack_size: 0,
+                immediate
             }
         } else {
             let plain_lut = match op_type {
@@ -108,6 +111,7 @@ impl Operation {
                 chunk_size,
                 cipher_lut,
                 lut_pack_size,
+                immediate
             }
         }
     }
