@@ -4,21 +4,16 @@ use aligned_vec::ABox;
 use concrete_fft::c64;
 use rayon::prelude::*;
 use refined_tfhe_lhe::{gen_all_auto_keys, generate_scheme_switching_key, AutomorphKey};
-use tfhe::{
-    boolean::prelude::{DecompositionBaseLog, DecompositionLevelCount, PolynomialSize},
-    core_crypto::{
-        prelude::{
-            allocate_and_encrypt_new_lwe_ciphertext,
-            allocate_and_generate_new_binary_glwe_secret_key,
-            allocate_and_generate_new_lwe_bootstrap_key,
-            convert_standard_lwe_bootstrap_key_to_fourier, decrypt_lwe_ciphertext,
-            encrypt_lwe_ciphertext, ActivatedRandomGenerator, ComputationBuffers,
-            EncryptionRandomGenerator, Fft, FourierGgswCiphertextList, FourierLweBootstrapKey,
-            FourierLweBootstrapKeyOwned, GlweSecretKeyOwned, LweCiphertext, LweKeyswitchKeyOwned,
-            LweSecretKeyOwned, Plaintext, SecretRandomGenerator, SignedDecomposer,
-        },
-        seeders::{new_seeder, Seeder},
+use tfhe::core_crypto::{
+    prelude::{
+        allocate_and_encrypt_new_lwe_ciphertext, allocate_and_generate_new_binary_glwe_secret_key,
+        allocate_and_generate_new_lwe_bootstrap_key, convert_standard_lwe_bootstrap_key_to_fourier,
+        decrypt_lwe_ciphertext, encrypt_lwe_ciphertext, ActivatedRandomGenerator,
+        EncryptionRandomGenerator, Fft, FourierGgswCiphertextList, FourierLweBootstrapKey,
+        FourierLweBootstrapKeyOwned, GlweSecretKeyOwned, LweCiphertext, LweSecretKeyOwned,
+        Plaintext, SecretRandomGenerator,
     },
+    seeders::{new_seeder, Seeder},
 };
 
 use crate::{
@@ -26,6 +21,7 @@ use crate::{
         operand::ArithmeticOp,
         operation::{OperandType, Operation},
     },
+    opmized_operations::Compare::opmized_compare,
     processors::{
         cbs_4_bits::circuit_bootstrapping_4_bits_at_once_rev_tr,
         key_gen::allocate_and_generate_new_reused_lwe_key,
@@ -55,7 +51,7 @@ impl Step {
 pub struct OperationManager {
     pub operations: Vec<Operation>,
     pub execution_plan: Vec<Step>,
-    pub buffer: ComputationBuffers,    // 计算缓冲区
+    // pub buffer: ComputationBuffers,    // 计算缓冲区
     pub fft: Fft,                      // FFT实例
     pub boxed_seeder: Box<dyn Seeder>, // 必须存活以保证encryption_generator的正确性
     pub secret_generator: SecretRandomGenerator<ActivatedRandomGenerator>,
@@ -191,7 +187,7 @@ impl OperationManager {
             params: param,
             operations: Vec::new(),
             execution_plan: Vec::new(),
-            buffer: ComputationBuffers::new(),
+            // buffer: ComputationBuffers::new(),
             fft: Fft::new(polynomial_size), // 需要实现这个方法或传入已有的
             boxed_seeder,
             secret_generator,
@@ -226,10 +222,7 @@ impl OperationManager {
         self.operations.push(operand);
     }
 
-    pub fn add_operatoins(
-        &mut self,
-        ops: Vec<(ArithmeticOp, OperandType, Option<usize>)>,
-    ) {
+    pub fn add_operatoins(&mut self, ops: Vec<(ArithmeticOp, OperandType, Option<usize>)>) {
         for (op, op_type, immediate) in ops {
             self.add_operation(op, op_type, immediate);
         }
@@ -294,89 +287,157 @@ impl OperationManager {
                 OperandType::BothCipher => true,
                 _ => false,
             };
-
-            if op.op == ArithmeticOp::MOVE {
-                // MOVE 操作直接从输入 LWE 列表复制到输出
-                let temp = self.lwe_lists[step.input_indices[0]].clone();
-                for (input, output) in temp
-                    .iter()
-                    .zip(self.lwe_lists[step.output_index].iter_mut())
-                {
-                    output.clone_from(input);
+            match (op.op, op.bit_width) {
+                (ArithmeticOp::MOVE, _) => {
+                    let temp = self.lwe_lists[step.input_indices[0]].clone();
+                    for (input, output) in temp
+                        .iter()
+                        .zip(self.lwe_lists[step.output_index].iter_mut())
+                    {
+                        output.clone_from(input);
+                    }
+                    continue;
                 }
-                continue;
-            }
 
-            let fourier_bsk_view = self.fourier_bsk.as_view();
-            let auto_keys = &self.auto_keys;
-            let ss_key_view = self.ss_key.as_view();
-            let ksk = &self.ksk;
-            let params = &self.params;
+                // 多个匹配型 + 范围条件
+                (x, y)
+                    if matches!(
+                        x,
+                        ArithmeticOp::GT
+                            | ArithmeticOp::GTE
+                            | ArithmeticOp::LT
+                            | ArithmeticOp::LTE
+                            | ArithmeticOp::EQ
+                    ) && y >= 16 =>
+                {
+                    let fourier_bsk_view = self.fourier_bsk.as_view();
+                    let auto_keys = &self.auto_keys;
+                    let ss_key_view = self.ss_key.as_view();
+                    let ksk = &self.ksk;
+                    let params = &self.params;
 
-            // 3) 取出参与的 LWE 切片
-            let lwe0 = self.lwe_lists[step.input_indices[0]].as_slice();
-            let lwe1_opt = match op.op_type {
-                OperandType::BothCipher => Some(self.lwe_lists[step.input_indices[1]].as_slice()),
-                _ => None,
-            };
-
-            // 4) 拿走 ggsw_lists 的所有权，避免 &mut self 的别名问题
-            //    （如果后面还要用回 self.ggsw_lists，最后再赋回）
-            let mut ggsw_lists = std::mem::take(&mut self.ggsw_lists);
-
-            // 5) 断言长度匹配：lwe 总数必须等于 ggsw 数
-            let total_lwe = lwe0.len() + lwe1_opt.map_or(0, |s| s.len());
-            // assert_eq!(ggsw_lists.len(), total_lwe, "LWE 数量与 GGSW 数量不一致");
-
-            // 6) 并行执行：按 ggsw 的索引 i 取对应的 lwe 引用
-            ggsw_lists
-                .par_iter_mut()
-                .enumerate()
-                .take(total_lwe)
-                .for_each(|(i, ggsw)| {
-                    // 选择第 i 个 LWE：可能来自第一个切片或第二个切片
-                    let lwe = if i < lwe0.len() {
-                        &lwe0[i]
-                    } else {
-                        // 安全：上面 total_lwe 已经匹配长度
-                        &lwe1_opt.unwrap()[i - lwe0.len()]
+                    // 3) 取出参与的 LWE 切片
+                    let lwe0 = self.lwe_lists[step.input_indices[0]].as_slice();
+                    let lwe1_opt = match op.op_type {
+                        OperandType::BothCipher => {
+                            Some(self.lwe_lists[step.input_indices[1]].as_slice())
+                        }
+                        _ => None,
                     };
 
-                    // 计算（每个线程只改它拿到的 ggsw；其余参数仅只读共享）
-                    circuit_bootstrapping_4_bits_at_once_rev_tr(
-                        lwe,
-                        ggsw, // 已是 &mut
-                        fourier_bsk_view,
-                        auto_keys,
-                        ss_key_view,
-                        ksk,
-                        params,
+                    // 4) 拿走 ggsw_lists 的所有权，避免 &mut self 的别名问题
+                    //    （如果后面还要用回 self.ggsw_lists，最后再赋回）
+                    let mut ggsw_lists = std::mem::take(&mut self.ggsw_lists);
+
+                    // 5) 断言长度匹配：lwe 总数必须等于 ggsw 数
+                    let total_lwe = lwe0.len() + lwe1_opt.map_or(0, |s| s.len());
+                    // assert_eq!(ggsw_lists.len(), total_lwe, "LWE 数量与 GGSW 数量不一致");
+
+                    // 6) 并行执行：按 ggsw 的索引 i 取对应的 lwe 引用
+                    ggsw_lists
+                        .par_iter_mut()
+                        .enumerate()
+                        .take(total_lwe)
+                        .for_each(|(i, ggsw)| {
+                            // 选择第 i 个 LWE：可能来自第一个切片或第二个切片
+                            let lwe = if i < lwe0.len() {
+                                &lwe0[i]
+                            } else {
+                                // 安全：上面 total_lwe 已经匹配长度
+                                &lwe1_opt.unwrap()[i - lwe0.len()]
+                            };
+
+                            // 计算（每个线程只改它拿到的 ggsw；其余参数仅只读共享）
+                            circuit_bootstrapping_4_bits_at_once_rev_tr(
+                                lwe,
+                                ggsw, // 已是 &mut
+                                fourier_bsk_view,
+                                auto_keys,
+                                ss_key_view,
+                                ksk,
+                                params,
+                            );
+                        });
+
+                    self.ggsw_lists = ggsw_lists;
+                    let temp = self.ggsw_lists.clone();
+                    let (temp0, temp1) = temp.split_at(self.ggsw_lists.len() / 2);
+                    let input0 = concat_ggsw_lists(temp0.to_vec(), true);
+                    let input1 = concat_ggsw_lists(temp1.to_vec(), true);
+                    let input = vec![input0, input1];
+
+                    opmized_compare(
+                        &input,
+                        self.lwe_lists[step.output_index].as_mut_slice(),
+                        op.op,
+                        &self.fft,
                     );
-                });
+                }
 
-            // 7) 放回 self（如果后续还要用）
-            let temp_ggsw_lists = ggsw_lists.clone();
-            self.ggsw_lists = ggsw_lists;
+                _ => {
+                    let fourier_bsk_view = self.fourier_bsk.as_view();
+                    let auto_keys = &self.auto_keys;
+                    let ss_key_view = self.ss_key.as_view();
+                    let ksk = &self.ksk;
+                    let params = &self.params;
 
-            let input_bits = concat_ggsw_lists(temp_ggsw_lists, is_both_cipher);
+                    // 3) 取出参与的 LWE 切片
+                    let lwe0 = self.lwe_lists[step.input_indices[0]].as_slice();
+                    let lwe1_opt = match op.op_type {
+                        OperandType::BothCipher => {
+                            Some(self.lwe_lists[step.input_indices[1]].as_slice())
+                        }
+                        _ => None,
+                    };
 
-            // op.vertical_packing_multi_lookup(
-            //     self.lwe_lists[step.output_index].as_mut_slice(),
-            //     &input_bits,
-            //     &self.fft,
-            //     &mut self.buffer,
-            // );
+                    // 4) 拿走 ggsw_lists 的所有权，避免 &mut self 的别名问题
+                    //    （如果后面还要用回 self.ggsw_lists，最后再赋回）
+                    let mut ggsw_lists = std::mem::take(&mut self.ggsw_lists);
 
-            op.parallel_vertical_packing_multi_lookup(
-                self.lwe_lists[step.output_index].as_mut_slice(),
-                &input_bits,
-                &self.fft,
-            );
+                    // 5) 断言长度匹配：lwe 总数必须等于 ggsw 数
+                    let total_lwe = lwe0.len() + lwe1_opt.map_or(0, |s| s.len());
+                    // assert_eq!(ggsw_lists.len(), total_lwe, "LWE 数量与 GGSW 数量不一致");
 
-            // for lew in self.lwe_lists[step.output_index].iter() {
-            //     let t = decrypt_lwe_ciphertext(&self.glwe_sk.as_lwe_secret_key(),lew);
-            //     println!("Output LWE Ciphertext: {:064b}", t.0);
-            // }
+                    // 6) 并行执行：按 ggsw 的索引 i 取对应的 lwe 引用
+                    ggsw_lists
+                        .par_iter_mut()
+                        .enumerate()
+                        .take(total_lwe)
+                        .for_each(|(i, ggsw)| {
+                            // 选择第 i 个 LWE：可能来自第一个切片或第二个切片
+                            let lwe = if i < lwe0.len() {
+                                &lwe0[i]
+                            } else {
+                                // 安全：上面 total_lwe 已经匹配长度
+                                &lwe1_opt.unwrap()[i - lwe0.len()]
+                            };
+
+                            // 计算（每个线程只改它拿到的 ggsw；其余参数仅只读共享）
+                            circuit_bootstrapping_4_bits_at_once_rev_tr(
+                                lwe,
+                                ggsw, // 已是 &mut
+                                fourier_bsk_view,
+                                auto_keys,
+                                ss_key_view,
+                                ksk,
+                                params,
+                            );
+                        });
+
+                    // 7) 放回 self（如果后续还要用）
+                    let temp_ggsw_lists = ggsw_lists.clone();
+                    self.ggsw_lists = ggsw_lists;
+
+                    let input_bits = concat_ggsw_lists(temp_ggsw_lists, is_both_cipher);
+
+                    op.parallel_vertical_packing_multi_lookup(
+                        self.lwe_lists[step.output_index].as_mut_slice(),
+                        &input_bits,
+                        &self.fft,
+                    );
+                }
+            }
+
         }
     }
 }

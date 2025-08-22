@@ -1,6 +1,9 @@
+use crate::operations::operand::ArithmeticOp;
+
 #[global_allocator]
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 pub mod operations;
+pub mod opmized_operations;
 pub mod processors;
 pub mod programs;
 pub mod utils;
@@ -461,18 +464,24 @@ mod circuit_bootstrapping_tests {
 mod manager_tests {
     use std::time::Instant;
 
+    use num_traits::ToPrimitive;
+    use rand::{Rng, RngCore};
     use tfhe::core_crypto::prelude::CastInto;
 
     use super::*;
     use crate::{
-        operations::{manager::OperationManager, operand::ArithmeticOp, operation::OperandType},
+        operations::{
+            manager::{OperationManager, Step},
+            operand::ArithmeticOp,
+            operation::OperandType,
+        },
         programs::{
             average::Average_Program, bubble::Bubble_Program, maximum::Maximum_Program,
             squaresum::Squaresum_Program,
         },
-        utils::instance::SetI,
+        utils::instance::{SetI, SetI_large, ZeroNoiseTest, ZeroNoiseTestII},
     };
-    const sample_size: usize = 10;
+    const sample_size: usize = 100;
     #[test]
     fn test_manager_maximum() {
         let size = 5_usize;
@@ -578,4 +587,56 @@ mod manager_tests {
         let result = manager.get_data(size);
         println!("buf[{}] = {}", size + 1, result);
     }
+
+    #[test]
+    fn test_manager_large_compare() {
+        let size = 2_usize;
+        let mut manager = OperationManager::new(*ZeroNoiseTestII, size + 1, 16);
+        manager.add_operation(ArithmeticOp::GTE, OperandType::BothCipher, None);
+        manager.set_execution_plan(vec![Step::new(0, vec![0, 1], size)]);
+        let mut rng = rand::thread_rng();
+        let mut count = 0;
+        let t = Instant::now();
+        for _ in 0..sample_size {
+            let a: u32 = rng.gen();
+            let b: u32 = rng.gen();
+            let a = a % 65536;
+            let b = b % 65536;
+            let true_result: usize = if a >= b { 1 } else { 0 };
+            // println!("a={:032b},b={:032b}", a, b);
+            manager.load_data(a.cast_into(), 0);
+            manager.load_data(b.cast_into(), 1);
+            manager.execute();
+            let result = manager.get_data(size);
+            let da = manager.get_data(0);
+            let db = manager.get_data(1);
+
+            if result == true_result {
+                count = count + 1;
+            } else {
+                println!("a={:016b},b={:016b}", a, b);
+                println!(
+                    "buf[{}] = {}, buf[{}] = {}, buf[{}] = {} ==? {}",
+                    0,
+                    da,
+                    1,
+                    db,
+                    size + 1,
+                    result,
+                    true_result
+                );
+            }
+        }
+        println!(
+            "accuracy: {:.3?}",
+            count.to_f64().unwrap() / sample_size.to_f64().unwrap()
+        );
+        println!(
+            "Execution time: {:.3?}",
+            t.elapsed() / sample_size.cast_into()
+        );
+    }
+
+   
 }
+

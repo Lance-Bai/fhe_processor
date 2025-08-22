@@ -1,5 +1,5 @@
 use crate::operations::{
-    cipher_lut::{generate_lut_from_vecs_auto, tfhe_vertical_packing_lookup},
+    cipher_lut::generate_lut_from_vecs_auto,
     operand::ArithmeticOp,
     plain_lut::{
         build_split_lut_tables, build_split_lut_tables_cipher_plain,
@@ -9,11 +9,11 @@ use crate::operations::{
 use aligned_vec::CACHELINE_ALIGN;
 use concrete_fft::c64;
 use dyn_stack::{PodStack, ReborrowMut};
-use itertools::Itertools;
 use rayon::{
     iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator},
     slice::ParallelSliceMut,
 };
+use tfhe::core_crypto::fft_impl::fft64::math::fft::FftView;
 use tfhe::core_crypto::prelude::{
     ComputationBuffers, Fft, FourierGgswCiphertextList, LweCiphertext, PolynomialList,
 };
@@ -23,7 +23,6 @@ use tfhe::core_crypto::{
     },
     prelude::*,
 };
-use tfhe::{boolean::ciphertext, core_crypto::fft_impl::fft64::math::fft::FftView};
 
 #[derive(Debug, Clone, Copy)]
 pub enum OperandType {
@@ -60,6 +59,23 @@ impl Operation {
                 bit_width,
                 chunk_size,
                 cipher_lut: Vec::new(), // MOVE 操作没有查找表
+                lut_pack_size: 0,
+            }
+        } else if matches!(
+            op,
+            ArithmeticOp::GT
+                | ArithmeticOp::GTE
+                | ArithmeticOp::LT
+                | ArithmeticOp::LTE
+                | ArithmeticOp::EQ
+        ) && bit_width >= 16
+        {
+            Self {
+                op,
+                op_type,
+                bit_width,
+                chunk_size,
+                cipher_lut: Vec::new(), // opmised compare 操作没有查找表
                 lut_pack_size: 0,
             }
         } else {
