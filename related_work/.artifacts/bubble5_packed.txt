@@ -1,24 +1,29 @@
 @fhe.compiler({"arr": "encrypted"})
-def bubble5(arr):
-    # 为了让编译器更好做数据流分析，把元素拆出来做就地“交换”
+def bubble5_packed(arr):
     a0, a1, a2, a3, a4 = arr[0], arr[1], arr[2], arr[3], arr[4]
 
-    # pass 1
+    # 冒泡网络（固定比较-交换序列）
     a0, a1 = swap_sorted(a0, a1)
     a1, a2 = swap_sorted(a1, a2)
     a2, a3 = swap_sorted(a2, a3)
     a3, a4 = swap_sorted(a3, a4)
 
-    # pass 2
     a0, a1 = swap_sorted(a0, a1)
     a1, a2 = swap_sorted(a1, a2)
     a2, a3 = swap_sorted(a2, a3)
 
-    # pass 3
     a0, a1 = swap_sorted(a0, a1)
     a1, a2 = swap_sorted(a1, a2)
 
-    # pass 4
     a0, a1 = swap_sorted(a0, a1)
 
-    return np.array([a0, a1, a2, a3, a4], dtype=np.uint8)
+    # ---- 关键：打包为单一 u64（避免多输出）----
+    # 用乘法代替位移，避免在 tracer 上做 astype/bitcast
+    packed = (
+        a0 * (1 << 32) +
+        a1 * (1 << 24) +
+        a2 * (1 << 16) +
+        a3 * (1 << 8)  +
+        a4
+    )
+    return packed  # 返回标量

@@ -3,7 +3,7 @@ annotated-types==0.6.0
 archspec==0.2.3
 boltons==24.1.0
 Brotli==1.0.9
-certifi==2025.1.31
+certifi==2025.8.3
 cffi==1.17.1
 charset-normalizer==3.3.2
 concrete-python==2.11.0
