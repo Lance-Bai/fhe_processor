@@ -216,7 +216,7 @@ def main():
     circuit_mean  = mean5.compile(inputset)
     circuit_sumsq = sumsq5.compile(inputset)
 
-    sample = np.array([42, 17, 99, 8, 63], dtype=np.uint8)
+    sample = np.array([5,7,6,4,2], dtype=np.uint8)
     print("Sample  :", sample.tolist())
     print("Start tests...")
     out_max,   t_max   = time_single_core(circuit_max.encrypt_run_decrypt, sample)
