@@ -481,7 +481,7 @@ mod manager_tests {
         },
         utils::instance::{SetI, SetI_large, ZeroNoiseTest, ZeroNoiseTestII},
     };
-    const sample_size: usize = 100;
+    const sample_size: usize = 1000;
     #[test]
     fn test_manager_maximum() {
         let size = 5_usize;
@@ -591,7 +591,7 @@ mod manager_tests {
     #[test]
     fn test_manager_large_compare() {
         let size = 2_usize;
-        let mut manager = OperationManager::new(*ZeroNoiseTestII, size + 1, 16);
+        let mut manager = OperationManager::new(*SetI_large, size + 1, 16);
         manager.add_operation(ArithmeticOp::LT, OperandType::BothCipher, None);
         manager.set_execution_plan(vec![Step::new(0, vec![0, 1], size)]);
         let mut rng = rand::thread_rng();

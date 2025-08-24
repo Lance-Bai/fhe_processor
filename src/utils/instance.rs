@@ -113,7 +113,7 @@ lazy_static! {
         FftType::Split(38), // fft_type_to_large
         DecompositionBaseLog(17), // auto_base_log
         DecompositionLevelCount(2), // auto_level
-        FftType::Split(38), // fft_type_auto
+        FftType::Split(34), // fft_type_auto
         DecompositionBaseLog(13), // glwe_ds_from_large_base_log
         DecompositionLevelCount(3), // glwe_ds_from_large_level
         FftType::Split(38), // fft_type_from_large

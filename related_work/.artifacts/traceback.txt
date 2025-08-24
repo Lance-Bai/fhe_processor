@@ -1,0 +1,19 @@
+TypeError: int() argument must be a string, a bytes-like object or a real number, not 'Tracer'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/media/lance/disk2/miniconda3/lib/python3.12/site-packages/concrete/fhe/compilation/module_compiler.py", line 406, in compile
+    function.evaluate("Compiling", inputset, configuration, function_artifacts)
+  File "/media/lance/disk2/miniconda3/lib/python3.12/site-packages/concrete/fhe/compilation/module_compiler.py", line 234, in evaluate
+    self.trace(first_sample, artifacts)
+  File "/media/lance/disk2/miniconda3/lib/python3.12/site-packages/concrete/fhe/compilation/module_compiler.py", line 147, in trace
+    self.graph = Tracer.trace(self.function, parameters, location=self.location)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/media/lance/disk2/miniconda3/lib/python3.12/site-packages/concrete/fhe/tracing/tracer.py", line 82, in trace
+    output_tracers: Any = function(**arguments)
+                          ^^^^^^^^^^^^^^^^^^^^^
+  File "/media/lance/disk2/fhe_processor/related_work/concrete_test.py", line 35, in bubble5
+    return np.array([a0, a1, a2, a3, a4], dtype=np.uint8)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: setting an array element with a sequence.

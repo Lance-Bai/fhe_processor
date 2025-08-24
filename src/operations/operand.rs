@@ -29,6 +29,7 @@ pub enum ArithmeticOp {
     NAND,
     NOT,
     MOVE,
+    CSEL,
 }
 
 impl ArithmeticOp {
@@ -124,6 +125,7 @@ impl ArithmeticOp {
             ArithmeticOp::NAND => !(a & b),
             ArithmeticOp::NOT => !a,
             ArithmeticOp::MOVE => a,
+            ArithmeticOp::CSEL => a,
         }
     }
 

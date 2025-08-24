@@ -290,6 +290,9 @@ impl OperationManager {
                 _ => false,
             };
             match (op.op, op.bit_width) {
+                (ArithmeticOp::CSEL,_)=>{
+                    
+                }
                 (ArithmeticOp::MOVE, _) => {
                     let temp = self.lwe_lists[step.input_indices[0]].clone();
                     for (input, output) in temp

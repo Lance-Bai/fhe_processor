@@ -45,9 +45,8 @@ fn make_manager(op: ArithmeticOp, operand: OperandType) -> (OperationManager, us
             }
         }
         OperandType::PlainCipher | OperandType::CipherPlain => {
-            // 与 PlainCipher 一致：左为密文，右为常量
             let k = safe_const_for(&op);
-            manager.add_operation(op, OperandType::PlainCipher, Some(k));
+            manager.add_operation(op, operand, Some(k));
             // 一元/二元在执行计划上都只需要一个密文输入 [0]，输出到 1
             manager.set_execution_plan(vec![Step::new(0, vec![0], 1)]);
             (manager, 1)
@@ -118,7 +117,7 @@ fn benches_all_ops(c: &mut Criterion) {
     // 需要覆盖的指令
     let ops: &[ArithmeticOp] = &[
         Add, Sub, Mul, Mulh, Div, Mod, EQ, GT, LT, GTE, LTE, MAX, MIN, RL, RR, SL, SR, OR, AND,
-        XOR, NAND, NOT, MOVE,
+        XOR, NAND, 
     ];
 
     // 三种 OperandType（PlainCipher 与 CipherPlain 统一逻辑）

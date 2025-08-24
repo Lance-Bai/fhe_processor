@@ -1,0 +1,138 @@
+digraph G {
+  rankdir=TB;
+  nodesep=0.35; ranksep="0.6 equally"; newrank=true;
+    node[ fontsize=20,  fontcolor="black"]
+
+  node [shape=ellipse, style="filled", fillcolor="#5c87deff"];
+  a0; a1; a2; a3; b0; b1; b2; b3;
+
+  node [shape=box, style="solid", fillcolor="white"];
+  node [label="E"]  E_in; E_out[label="E"]
+  node [label="L"]  L1;L2;L3;L4;
+  node [label="G"]  G1;G2;G3;G4;
+
+  node [shape=ellipse, style="filled", label="Mux", fillcolor="#d13838ff"];
+  E; E1; E0; e1; e0;
+  E11; E10; E01; E00; e11; e10;
+  E111; E110; E101; E100; e111; e110;
+  E1111; E1110; E1101; E1100;
+
+  // ── 层次：每层右端放“本层用到”的 a/b ──
+  // L1  底层：用到 a0
+  { rank=same; E1; E0; a0 }
+  E1 -> E0 [style=invis]; E0 -> a0 [style=invis];
+
+  // L2 用到 b0
+  { rank=same; L1; e1; e0; G1; b0 }
+  L1->e1[style=invis]; e1->e0[style=invis]; e0->G1[style=invis]; G1->b0[style=invis];
+
+  // L3 用到 a1
+  { rank=same; E11; E10; E01; E00; a1 }
+  E11->E10[style=invis]; E10->E01[style=invis]; E01->E00[style=invis]; E00->a1[style=invis];
+
+  // L4 用到 b1
+  { rank=same; L2; e11; e10; G2; b1 }
+  L2->e11[style=invis]; e11->e10[style=invis]; e10->G2[style=invis]; G2->b1[style=invis];
+
+  // L5 用到 a2
+  { rank=same; E111; E110; E101; E100; a2 }
+  E111->E110[style=invis]; E110->E101[style=invis]; E101->E100[style=invis]; E100->a2[style=invis];
+
+  // L6 用到 b2
+  { rank=same; L3; e111; e110; G3; b2 }
+  L3->e111[style=invis]; e111->e110[style=invis]; e110->G3[style=invis]; G3->b2[style=invis];
+
+  // L7 用到 a3
+  { rank=same; E1111; E1110; E1101; E1100; a3 }
+  E1111->E1110[style=invis]; E1110->E1101[style=invis]; E1101->E1100[style=invis]; E1100->a3[style=invis];
+
+  // L8 顶行：用到 b3；L/G 在两端
+  { rank=same; L4; E_in; G4; b3 }
+  L4->E_in[style=invis]; E_in->G4[style=invis]; G4->b3[style=invis];
+
+  // ── 真实边（与你原来一致） ──
+  E1 -> E [label="1"];
+  E0 -> E [label="0"];
+  a0 -> E;
+  E -> E_out;
+
+  e1 -> E1 [label="1"];
+  G1 -> E1 [label="0"];
+  b0 -> E1;
+
+  L1 -> E0 [label="1"];
+  e0 -> E0 [label="0"];
+  b0 -> E0;
+
+  E01 -> e0 [label="1"];
+  E00 -> e0 [label="0"];
+  a1 -> e0;
+
+  E11 -> e1 [label="1"];
+  E10 -> e1 [label="0"];
+  a1 -> e1;
+
+  e11 -> E11 [label="1"];
+  L2 -> E11 [label="0"];
+  b1 -> E11;
+
+  G2 -> E10 [label="1"];
+  e10 -> E10 [label="0"];
+  b1 -> E10;
+
+  e11 -> E01 [label="1"];
+  G2 -> E01 [label="0"];
+  b1 -> E01;
+
+  L2 -> E00 [label="1"];
+  e10 -> E00 [label="0"];
+  b1 -> E00;
+
+  E111 -> e11 [label="1"];
+  E110 -> e11 [label="0"];
+  a2 -> e11;
+
+  E101 -> e10 [label="1"];
+  E100 -> e10 [label="0"];
+  a2 -> e10;
+
+  e111 -> E111 [label="1"];
+  L3 -> E111 [label="0"];
+  b2 -> E111;
+
+  G3 -> E110 [label="1"];
+  e110 -> E110 [label="0"];
+  b2 -> E110;
+
+  e111 -> E101 [label="1"];
+  G3 -> E101 [label="0"];
+  b2 -> E101;
+
+  L3 -> E100 [label="1"];
+  e110 -> E100 [label="0"];
+  b2 -> E100;
+
+  E1111 -> e111 [label="1"];
+  E1110 -> e111 [label="0"];
+  a3 -> e111;
+
+  E1101 -> e110 [label="1"];
+  E1100 -> e110 [label="0"];
+  a3 -> e110;
+
+  E_in -> E1111 [label="1"];
+  L4 -> E1111 [label="0"];
+  b3 -> E1111;
+
+  G4 -> E1110 [label="1"];
+  E_in -> E1110 [label="0"];
+  b3 -> E1110;
+
+  E_in -> E1101 [label="1"];
+  G4 -> E1101 [label="0"];
+  b3 -> E1101;
+
+  L4 -> E1100 [label="1"];
+  E_in -> E1100 [label="0"];
+  b3 -> E1100;
+}

@@ -60,6 +60,7 @@ pub fn pbs_many_lut_after_ms_before_extract<Scalar, OutputCont>(
         let mut buffers = ComputationBuffers::new();
         let fft = Fft::new(polynomial_size);
         let fft = fft.as_view();
+        
 
         buffers.resize(
             programmable_bootstrap_lwe_ciphertext_mem_optimized_requirement::<Scalar>(
