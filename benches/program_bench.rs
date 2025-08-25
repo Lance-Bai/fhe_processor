@@ -68,7 +68,6 @@ fn bench_manager_execute_squaresum(c: &mut Criterion) {
         b.iter_custom(|iters| {
             let mut total = Duration::ZERO;
             for _ in 0..iters {
-                // 清零放在计时外
                 manager.load_data(0, 6);
 
                 let start = Instant::now();
@@ -97,7 +96,6 @@ fn bench_manager_execute_average(c: &mut Criterion) {
         b.iter_custom(|iters| {
             let mut total = Duration::ZERO;
             for _ in 0..iters {
-                // 清零放在计时外
                 manager.load_data(0, 5);
 
                 let start = Instant::now();

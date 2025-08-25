@@ -1,8 +1,8 @@
-# Artifact for "Tetris: A Versatile TFHE Look-Up-Table Framework and Its Application to FHE Instruction Set"
+# Artifact for *Tetris: A Versatile TFHE Look-Up-Table Framework and Its Application to FHE Instruction Set*
 
-## Download the Artifact
+## Downloading the Artifact
 
-This artifact is avaliable on [anonymous.4open.science](https://anonymous.4open.science/r/artifact_of_fhe_processor/) and can be download with:
+The artifact is available on [anonymous.4open.science](https://anonymous.4open.science/r/artifact_of_fhe_processor/) and can be downloaded using:
 
 ```bash
 curl -L -o fhe_processor.zip \
@@ -16,58 +16,119 @@ wget -O fhe_processor.zip \
   "https://anonymous.4open.science/api/repo/artifact_of_fhe_processor/zip"
 ```
 
-Then unzip it and enter the workspace:
+Unzip and enter the workspace:
 
 ```bash
-unzip fhe_processor.zip 
+unzip fhe_processor.zip
+cd artifact_of_fhe_processor
 ```
 
-## Evaluate the [Benchmark](./benches/)
+---
 
-### [LUT time evaluation](./benches/lut_bench.rs)
+## Environment & Dependencies
 
-This bench is correspond to the **Table 2: LUT time results** in the article. It test the execution time of n-to-n LUT with the same calculation process used in the FHE processor. It provide 2 parameter set which is **SetI** and **SetI_large**, and support bits precision from **4 to 32**, threads from **1 to 8**. For large precision may require huge amount of time and memory, by default we set precision up to 24 bits. To test high precision, modify should be done to [here](./benches/lut_bench.rs#L293-L295).
+- **Rust**: Version 1.79 or later (tested with Rust 1.81 stable)
+- **Cargo**: Bundled with Rust toolchain
+- **Operating System**:
+  - Linux (Ubuntu 24.10 LTS, tested)
+- **Memory**: ≥ 24 GB recommended (tested)
+- **Other tools**: `wget` or `curl` for artifact download
 
-```RUST
-    let ctx = setup_ctx(*SetI);
-    let n_vals = [4, 8, 12, 16, 20, 24,];
-    let thread_vals = [1, 2, 4, 8];
+---
+
+## Quick Start
+
+To quickly try out the FHE processor, you can run the example test defined in [lib.rs](./src/lib.rs).  
+Execute the following command:
+
+```bash
+cargo test --release --package fhe_processor -- manager_tests --show-output
 ```
 
-After set the config or just use the default config, the bench can be run with:
+This will run the processor test suite and display the results directly in the console.
+
+---
+
+## Benchmark Evaluation
+
+### [LUT Time Evaluation](./benches/lut_bench.rs)
+
+This benchmark corresponds to **Table 2: LUT time results** in the paper.  
+It measures the execution time of *n-to-n LUTs* using the same computation pipeline as the FHE processor.  
+
+- Provides two parameter sets: **SetI** and **SetI_large**  
+- Supports precision from **4 to 32 bits**  
+- Supports **1–8 threads**  
+
+> **Note:** High-precision tests may require significant time and memory. By default, the maximum precision is set to 24 bits.  
+To test higher precision, modify the configuration at [these 3 lines](./benches/lut_bench.rs#L292-L294).
+
+```rust
+let ctx = setup_ctx(*SetI);
+let n_vals = [4, 8, 12, 16, 20, 24];
+let thread_vals = [1, 2, 4, 8];
+```
+
+Run with:
 
 ```bash
 cargo bench --bench lut_bench
 ```
 
-Then the time shown in the concole is the total time for each precision-thread group. The more detailed information for each iters and the seprete time for circuit boostrapping and table look up is stored in [log](./target/bench_logs), which is also the data shown in **Table 3**.
+- The console output reports the total execution time for each precision–thread group.  
+- Detailed iteration results and separated timings for *circuit bootstrapping* and *table lookup* are stored in [log](./target/bench_logs), corresponding to **Table 3**.
 
-### [Processor operations evaluation](./benches/all_op_bench.rs)
+---
 
-This bench correspond the **Table 5** in the article, it test all the operations with 8-bit data len with all modes of **cipher-cipher**, **cipheriplain** and **plain-cipher**. This branch can be run with default the multithread option. Will the data used in article is the performance in single thread for fairness, which can be evaluated with the below line.
+### [Processor Operations Evaluation](./benches/all_op_bench.rs)
+
+This benchmark corresponds to **Table 5** in the paper.  
+It evaluates all operations with 8-bit inputs under three modes:  
+
+- **cipher–cipher**  
+- **cipher–plain**  
+- **plain–cipher**
+
+By default, benchmarks run with multithreading enabled.  
+For fairness (as in the paper), single-thread performance can be measured with:
 
 ```bash
-cargo bench --bench all_op_bench
-or
 RAYON_NUM_THREADS=1 cargo bench --bench all_op_bench
 ```
 
-### [Typical programs evaluation](./benches/program_bench.rs)
+---
 
-This bench correspond to **Table 6**. It test 4 typical programs to evaluate the performance of the FHE processor. For each program, it will load 5 8-bit unsigned integer as the input. The programs are **Maximum**, find the largest value. **Bubble Sort**, do bubble sort to the 5 input, from small to large. **Square Sum**, calculate the square of each input then add then together. **Average**, calculate the average value of the 5 input. All of these programs are executed with the below, still, the data represent in the article is in single thread.
+### [Typical Programs Evaluation](./benches/program_bench.rs)
+
+This benchmark corresponds to **Table 6** in the paper.  
+It evaluates four representative programs on five unsigned 8-bit inputs:  
+
+- **Maximum**: Find the largest value  
+- **Bubble Sort**: Sort the inputs in ascending order  
+- **Square Sum**: Compute the sum of squared inputs  
+- **Average**: Compute the average value  
+
+Run with:
 
 ```bash
-cargo bench --bench program_bench
-or
 RAYON_NUM_THREADS=1 cargo bench --bench program_bench
 ```
 
-### [Large precision compare Opmization](./benches/large_op_bench.rs)
+Again, single-thread results are used in the paper for comparison.
 
-This bench correspond to **Table 7**. It test the performance of opmized compare instruction and trival compare instruction. As all the compare instruction has same implemention, we only test **GTE** here. Besides, **GTE_ORI** is the trival implemention, and it is slow when has 32 bits inputs, so we not open it by default. If necessary remove the commont [here](./benches/large_op_bench.rs#L34-L36) to enable the test. The bench is run with:
+---
+
+### [Large-Precision Comparison Optimization](./benches/large_op_bench.rs)
+
+This benchmark corresponds to **Table 7** in the paper.  
+It compares optimized and trivial implementations of comparison instructions.  
+
+- Only **GTE** is tested, since all comparisons share the same implementation.  
+- **GTE_ORI** is the trivial version; it is slow for 32-bit inputs and disabled by default.  
+  To enable, uncomment [this section](./benches/large_op_bench.rs#L34-L36).
+
+Run with:
 
 ```bash
-cargo bench --bench large_op_bench
-or
 RAYON_NUM_THREADS=1 cargo bench --bench large_op_bench
 ```
