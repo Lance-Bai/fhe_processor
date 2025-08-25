@@ -30,10 +30,6 @@ jemalloc-ctl = "0.5"
 indicatif = "0.17"
 
 [[bench]]
-name = "manager_bench"   
-harness = false 
-
-[[bench]]
 name = "lut_bench"   
 harness = false 
 

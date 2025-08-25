@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Shr};
+use std::{collections::HashMap};
 
 use aligned_vec::ABox;
 use concrete_fft::c64;
@@ -35,9 +35,9 @@ use crate::{
 };
 
 pub struct Step {
-    pub op_index: usize,           // Operation在Vec中的索引
-    pub input_indices: Vec<usize>, // 这一操作的输入数据在DataList中的索引
-    pub output_index: usize,       // 结果写入DataList哪个位置
+    pub op_index: usize,           // Operation index in Vec
+    pub input_indices: Vec<usize>, // Oparnd index(s) in Vec
+    pub output_index: usize,       // result inedx in Vec
 }
 
 impl Step {
@@ -53,9 +53,8 @@ impl Step {
 pub struct OperationManager {
     pub operations: Vec<Operation>,
     pub execution_plan: Vec<Step>,
-    // pub buffer: ComputationBuffers,    // 计算缓冲区
-    pub fft: Fft,                      // FFT实例
-    pub boxed_seeder: Box<dyn Seeder>, // 必须存活以保证encryption_generator的正确性
+    pub fft: Fft,                      
+    pub boxed_seeder: Box<dyn Seeder>, 
     pub secret_generator: SecretRandomGenerator<ActivatedRandomGenerator>,
     pub encryption_generator: EncryptionRandomGenerator<ActivatedRandomGenerator>,
 
@@ -68,8 +67,8 @@ pub struct OperationManager {
     pub ss_key: FourierGgswCiphertextList<Vec<c64>>,
 
     pub ggsw_lists: Vec<FourierGgswCiphertextList<Vec<c64>>>,
-    pub lwe_lists: Vec<Vec<LweCiphertext<Vec<u64>>>>, // mem_size个lwe_list
-    pub data_len: usize,                              // 数据长度
+    pub lwe_lists: Vec<Vec<LweCiphertext<Vec<u64>>>>, 
+    pub data_len: usize,                              
 }
 
 impl OperationManager {

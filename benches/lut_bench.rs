@@ -7,8 +7,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use aligned_vec::ABox;
 use concrete_fft::c64;
-// benches/lut_sizes.rs
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use fhe_processor::operations::cipher_lut::generate_lut_from_vecs_auto;
 use fhe_processor::operations::manager::concat_ggsw_lists;
 use fhe_processor::operations::operation::horizontal_vertical_packing_without_extract;
@@ -18,7 +17,7 @@ use fhe_processor::processors::key_gen::allocate_and_generate_new_reused_lwe_key
 use fhe_processor::processors::lwe_stored_ksk::{
     allocate_and_generate_new_stored_reused_lwe_keyswitch_key, LweStoredReusedKeyswitchKey,
 };
-use fhe_processor::utils::instance::{SetI_large, SetI_small};
+use fhe_processor::utils::instance::{SetI_large};
 use fhe_processor::{utils::instance::SetI, utils::parms::ProcessorParam};
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::iter::{
@@ -42,25 +41,19 @@ use tfhe::core_crypto::{
     },
     seeders::new_seeder,
 };
-// 按你的工程实际引入：
-// use crate::{vertical_packing_multi_lookup, LUTType, ...};
 
 const SAMPLE_SIZE: usize = 10;
 
 struct BenchCtx {
-    // 运行时只读共享
     fourier_bsk: FourierLweBootstrapKeyOwned,
     auto_keys: HashMap<usize, AutomorphKey<ABox<[c64]>>>,
     ss_key: FourierGgswCiphertextList<Vec<c64>>,
     glwe_sk: GlweSecretKey<Vec<u64>>,
     ksk: LweStoredReusedKeyswitchKey<Vec<u64>>,
     params: ProcessorParam<u64>,
-    // 视图或其他你要复用的只读对象...
 }
 
-// ---------- 工具：一次性做初始化 ----------
 fn setup_ctx(param: ProcessorParam<u64>) -> BenchCtx {
-    // 读取参数（与你给的一致）
     let lwe_dimension = param.lwe_dimension();
     let polynomial_size = param.polynomial_size();
     let glwe_dimension = param.glwe_dimension();
@@ -76,7 +69,7 @@ fn setup_ctx(param: ProcessorParam<u64>) -> BenchCtx {
     let ss_level = param.ss_level();
     let ciphertext_modulus = param.ciphertext_modulus();
 
-    let mut boxed_seeder = new_seeder(); // 你已有的 seeder
+    let mut boxed_seeder = new_seeder();
     let seeder = boxed_seeder.as_mut();
 
     let mut secret_generator =
@@ -85,7 +78,6 @@ fn setup_ctx(param: ProcessorParam<u64>) -> BenchCtx {
     let mut encryption_generator =
         EncryptionRandomGenerator::<ActivatedRandomGenerator>::new(seeder.seed(), seeder);
 
-    // 生成密钥（与你给的流程相同）
     let glwe_sk = allocate_and_generate_new_binary_glwe_secret_key(
         glwe_dimension,
         polynomial_size,
@@ -140,10 +132,6 @@ fn setup_ctx(param: ProcessorParam<u64>) -> BenchCtx {
         ciphertext_modulus,
         &mut encryption_generator,
     );
-
-    // 如果你需要一个空的（或占位）Fourier GGSW list，可在真正 case 里重建
-    // 这里只保留参数
-
     BenchCtx {
         fourier_bsk,
         auto_keys: auto_keys,
@@ -154,29 +142,25 @@ fn setup_ctx(param: ProcessorParam<u64>) -> BenchCtx {
     }
 }
 
-// ---------- 每个 n 的一次执行（只负责“计时的核心路径”） ----------
 fn run_cbs_part(ctx: &BenchCtx, prep: &mut IterSetup) {
     let mut ggsw_lists = std::mem::take(&mut prep.fourier_ggsw_lists);
 
     let total_lwe = prep.lwes.len();
-    // assert_eq!(ggsw_lists.len(), total_lwe, "LWE 数量与 GGSW 数量不一致");
     let fourier_bsk_view = ctx.fourier_bsk.as_view();
     let auto_keys = &ctx.auto_keys;
     let ss_key_view = ctx.ss_key.as_view();
     let params = &ctx.params;
     let ksk = &ctx.ksk;
 
-    // 6) 并行执行：按 ggsw 的索引 i 取对应的 lwe 引用
     ggsw_lists
         .par_iter_mut()
         .enumerate()
         .take(total_lwe)
         .for_each(|(i, ggsw)| {
             let lwe = &prep.lwes[i];
-            // 计算（每个线程只改它拿到的 ggsw；其余参数仅只读共享）
             circuit_bootstrapping_4_bits_at_once_rev_tr(
                 &lwe,
-                ggsw, // 已是 &mut
+                ggsw,
                 fourier_bsk_view,
                 auto_keys,
                 ss_key_view,
@@ -226,23 +210,17 @@ fn run_lut_part(ctx: &BenchCtx, prep: &mut IterSetup, n_bits: usize) {
 }
 
 struct IterSetup {
-    // LWE 输入（数量 = n_bits/4）
     lwes: Vec<LweCiphertext<Vec<u64>>>,
-    // GGSW 容器（外部分配内存，计时阶段只写入）
     fourier_ggsw_lists: Vec<FourierGgswCiphertextList<Vec<c64>>>,
-    // 输出 LWE（长度按你的查表策略决定）
     lwe_outs: Vec<LweCiphertext<Vec<u64>>>,
     lut: Vec<PolynomialList<Vec<u64>>>,
-    pack_size: usize, // 每个多项式能打包多少张表
+    pack_size: usize, // one poly contains how many lut
 }
 
 fn make_iter_setup(ctx: &BenchCtx, n_bits: usize) -> IterSetup {
-    let num_inputs = n_bits / ctx.params.message_size(); // 你要求的数量
+    let num_inputs = n_bits / ctx.params.message_size();
 
-    // 1) 生成 LWE 输入（不计时）
-    // 提示：为了完全隔离计时，可复用一个本地 ERG，这里为了简洁省略
     let lwes = {
-        // 更稳妥做法：用你已有的 seeder/ERG；这里给出可替换的占位
         let lwe_sk = ctx.glwe_sk.as_lwe_secret_key();
         let mut boxed_seeder = new_seeder();
         let seeder = boxed_seeder.as_mut();
@@ -254,7 +232,6 @@ fn make_iter_setup(ctx: &BenchCtx, n_bits: usize) -> IterSetup {
                 allocate_and_encrypt_new_lwe_ciphertext(
                     &lwe_sk,
                     Plaintext(m << (u64::BITS as usize - ctx.params.message_size())),
-                    // 按需加入真实噪声：
                     ctx.params.lwe_modular_std_dev(),
                     ctx.params.ciphertext_modulus(),
                     &mut enc,
@@ -262,7 +239,7 @@ fn make_iter_setup(ctx: &BenchCtx, n_bits: usize) -> IterSetup {
             })
             .collect()
     };
-    // 2) a trival lut, just ues it size
+    // a trival lut, just ues it size
     let plain_lut = vec![0usize; 1 << n_bits];
     let split_plain_lut =
         split_adjusted_lut_by_chunk(&plain_lut, n_bits, ctx.params.extract_size());
@@ -272,7 +249,6 @@ fn make_iter_setup(ctx: &BenchCtx, n_bits: usize) -> IterSetup {
         1 << (u64::BITS as usize - ctx.params.message_size()),
     );
 
-    // 3) 预分配 GGSW 容器（不计时；计时阶段只写入）
     let fourier_ggsw_list = FourierGgswCiphertextList::new(
         vec![
             c64::default();
@@ -290,8 +266,7 @@ fn make_iter_setup(ctx: &BenchCtx, n_bits: usize) -> IterSetup {
     );
     let fourier_ggsw_lists = vec![fourier_ggsw_list; num_inputs];
 
-    // 4) 输出 LWE 数量（按你的打包策略决定）
-    let out_len = n_bits / 4; // 示例：与输入数量相等；按需调整
+    let out_len = n_bits / 4;
     let lwe_outs = (0..out_len)
         .map(|_| {
             allocate_and_trivially_encrypt_new_lwe_ciphertext(
@@ -315,9 +290,11 @@ fn make_iter_setup(ctx: &BenchCtx, n_bits: usize) -> IterSetup {
 }
 
 fn bench_lut_sizes(c: &mut Criterion) {
-    let ctx = setup_ctx(*SetI); // 你的初始化
+    let ctx = setup_ctx(*SetI);
+    let n_vals = [4, 8, 12, 16, 20, 24,];
+    let thread_vals = [1, 2, 4, 8];
 
-    // ---------------- 日志文件（CSV） ----------------
+    // ---------------- CSV ----------------
     let target_dir = env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".into());
     let logs_dir = format!("{}/bench_logs", target_dir);
     let _ = create_dir_all(&logs_dir);
@@ -325,7 +302,7 @@ fn bench_lut_sizes(c: &mut Criterion) {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    let log_path = format!("{}/lut_combo_large_{}.csv", logs_dir, ts);
+    let log_path = format!("{}/lut_time_{}.csv", logs_dir, ts);
     let file = OpenOptions::new()
         .create(true)
         .append(true)
@@ -333,17 +310,14 @@ fn bench_lut_sizes(c: &mut Criterion) {
         .unwrap();
     let writer = Arc::new(Mutex::new(BufWriter::new(file)));
 
-    // 写 CSV 表头
     {
         let mut w = writer.lock().unwrap();
         let _ = writeln!(w, "n_bits,threads,avg_cbs_ms,avg_lut_ms,avg_total_ms,iters");
         let _ = w.flush();
     }
 
-    // ---------------- 进度条 ----------------
-    let n_vals = [4, 8, 12, 16, 20, 24];
-    let thread_vals = [1];
-    let total_cases = (n_vals.len() * thread_vals.len() * SAMPLE_SIZE) as u64;
+    // ---------------- bar ----------------
+    let total_cases = (n_vals.len() * thread_vals.len()) as u64;
     let pb = Arc::new(ProgressBar::new(total_cases));
     pb.set_style(
         ProgressStyle::with_template(
@@ -364,11 +338,7 @@ fn bench_lut_sizes(c: &mut Criterion) {
                 &n_bits,
                 |b, &nb| {
                     b.iter_custom(|iters| {
-                        println!(
-                            "Running n_bits={} with {} threads for {} iterations",
-                            nb, threads, iters
-                        );
-                        // 局部 Rayon 线程池（不计时）
+
                         let pool = ThreadPoolBuilder::new()
                             .num_threads(threads)
                             .build()
@@ -379,17 +349,14 @@ fn bench_lut_sizes(c: &mut Criterion) {
                         let mut sum_lut = Duration::ZERO;
 
                         for _ in 0..iters {
-                            // 不计时：一次迭代的准备（加密若干 LWE、trivial LUT、预分配容器等）
                             let mut prep = make_iter_setup(&ctx, nb);
 
-                            // 计时 CBS
                             let t0 = Instant::now();
                             pool.install(|| {
                                 run_cbs_part(&ctx, &mut prep);
                             });
                             let dt_cbs = t0.elapsed();
 
-                            // 计时 LUT
                             let t1 = Instant::now();
                             pool.install(|| {
                                 run_lut_part(&ctx, &mut prep, nb);
@@ -400,16 +367,14 @@ fn bench_lut_sizes(c: &mut Criterion) {
                             sum_lut += dt_lut;
                             sum_total += dt_cbs + dt_lut;
 
-                            black_box(&prep); // 防优化
+                            black_box(&prep);
                         }
 
-                        // 平均值（毫秒）
                         let iters_f = iters as f64;
                         let avg_cbs_ms = (sum_cbs.as_secs_f64() * 1e3) / iters_f;
                         let avg_lut_ms = (sum_lut.as_secs_f64() * 1e3) / iters_f;
                         let avg_total_ms = (sum_total.as_secs_f64() * 1e3) / iters_f;
 
-                        // 写入日志（CSV）
                         {
                             let mut w = writer.lock().unwrap();
                             let _ = writeln!(
@@ -419,14 +384,14 @@ fn bench_lut_sizes(c: &mut Criterion) {
                             );
                             let _ = w.flush();
                         }
-                        // 进度条前进一格（每个 n_bits×threads 组合完成一次测量时）
-                        pb.set_message(format!("n_bits={n_bits} threads={threads}"));
-                        pb.inc(1);
-                        // 返回 total 给 Criterion 用于曲线/统计
+
                         sum_total
                     });
                 },
             );
+
+            pb.set_message(format!("n_bits={n_bits} threads={threads}"));
+            pb.inc(1);
         }
     }
 
@@ -436,14 +401,14 @@ fn bench_lut_sizes(c: &mut Criterion) {
 
 fn small_runs() -> Criterion {
     Criterion::default()
-        .sample_size(SAMPLE_SIZE) // 改这里
+        .sample_size(SAMPLE_SIZE) 
         .warm_up_time(Duration::from_secs(1))
-        .measurement_time(Duration::from_secs(60))
-        .configure_from_args() // 允许命令行再覆盖
+        .measurement_time(Duration::from_secs(20))
+        .configure_from_args() 
 }
 criterion_group! {
     name = benches;
-    config = small_runs();  // 注意这里要调用 ()
+    config = small_runs();  
     targets = bench_lut_sizes
 }
 criterion_main!(benches);
