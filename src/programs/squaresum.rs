@@ -1,8 +1,8 @@
 use crate::operations::{manager::Step, operand::ArithmeticOp, operation::OperandType};
 
-pub struct Squaresum_Program;
+pub struct SquaresumProgram;
 
-impl Squaresum_Program {
+impl SquaresumProgram {
     pub fn load_operatonis() -> Vec<(ArithmeticOp, OperandType, Option<usize>)> {
         let mut operations = Vec::new();
         operations.push((ArithmeticOp::Mul, OperandType::BothCipher, None));

@@ -1,8 +1,8 @@
 use crate::operations::{manager::Step, operand::ArithmeticOp, operation::OperandType};
 
-pub struct Average_Program;
+pub struct AverageProgram;
 
-impl Average_Program {
+impl AverageProgram {
     pub fn load_operatonis(size: usize) -> Vec<(ArithmeticOp, OperandType, Option<usize>)> {
         let mut operations = Vec::new();
         operations.push((ArithmeticOp::Add, OperandType::BothCipher, None));

@@ -39,7 +39,6 @@ where
     Scalar: UnsignedTorus + CastInto<usize> + CastFrom<usize>,
 {
     let mut output = input.wrapping_sub(signed_div2(bias)); // b - mu * bias, mu = 1/2
-    // println!("sub is : {:064b}", output);
     output <<= offset.0;
     output >>= Scalar::BITS - poly_size.log2().0 - 2 + lut_count_log.0;
     // Do the rounding
@@ -69,12 +68,10 @@ where
     for (element, degree) in input.get_mask().as_ref().iter().zip(mask.iter_mut()) {
         let (output, bias) =
             fast_low_noise_pbs_modulus_switch_mask(*element, poly_size, offset, lut_count_log);
-        // println!("bias is : {:064b}", bias);
         *degree = MonomialDegree(output);
         bias_acc = bias_acc.wrapping_add(bias);
         //bias_acc += bias;
     }
-    // println!("bias acc: {:064b}", bias_acc);
 
     let body = MonomialDegree(fast_low_noise_pbs_modulus_switch_body(
         *input.get_body().data,
@@ -104,12 +101,12 @@ mod mod_switch_test {
             prelude::{
                 allocate_and_encrypt_new_lwe_ciphertext,
                 allocate_and_generate_new_binary_lwe_secret_key, ActivatedRandomGenerator,
-                CastInto, EncryptionRandomGenerator, LutCountLog, ModulusSwitchOffset, Plaintext,
+                EncryptionRandomGenerator, LutCountLog, ModulusSwitchOffset, Plaintext,
                 SecretRandomGenerator,
             },
             seeders::new_seeder,
         },
-        shortint::{ciphertext, CiphertextModulus},
+        shortint::CiphertextModulus,
     };
 
     use crate::processors::low_noise_ms::fast_low_noise_pbs_modulus_switch;
@@ -133,7 +130,6 @@ mod mod_switch_test {
             lwe_dimension,
             &mut secret_generator,
         );
-        // println!("key is: {:?}", key.clone().into_container());
 
         let cipher = allocate_and_encrypt_new_lwe_ciphertext(
             &key,
@@ -143,10 +139,7 @@ mod mod_switch_test {
             &mut encryption_generator,
         );
 
-        // println!("lwe is:\n");
-        // for e in cipher.clone().into_container() {
-        //     println!("{:064b}\n", e)
-        // }
+
 
         let (mask, body) = fast_low_noise_pbs_modulus_switch(
             &cipher,
@@ -154,14 +147,7 @@ mod mod_switch_test {
             ModulusSwitchOffset(0),
             lut_log_count,
         );
-        // print!("mask: [");
-        // for (i, m) in mask.iter().enumerate() {
-        //     if i != 0 {
-        //         print!(", ");
-        //     }
-        //     print!("\n{:064b}", m.0);
-        // }
-        // println!("]");
+
         println!("our body: {:064b}", body.0);
         println!(
             "ori body: {:064b}",

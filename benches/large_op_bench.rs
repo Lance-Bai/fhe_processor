@@ -1,4 +1,3 @@
-// benches/manager_execute.rs
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
 use fhe_processor::{
     operations::{
@@ -14,7 +13,6 @@ use tfhe::core_crypto::prelude::CastInto;
 
 const PLAIN_VAL: usize = 500;
 
-/// 基准组合项
 struct BenchCase {
     bit_len: usize,
     op: ArithmeticOp,

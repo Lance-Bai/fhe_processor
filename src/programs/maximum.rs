@@ -1,8 +1,8 @@
 use crate::operations::{manager::Step, operand::ArithmeticOp, operation::OperandType};
 
-pub struct Maximum_Program;
+pub struct MaximumProgram;
 
-impl Maximum_Program {
+impl MaximumProgram {
     pub fn load_operatonis() -> Vec<(ArithmeticOp, OperandType, Option<usize>)> {
         let mut operations = Vec::new();
         operations.push((ArithmeticOp::MAX, OperandType::BothCipher, None));

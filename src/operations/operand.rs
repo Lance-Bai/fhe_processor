@@ -1,6 +1,4 @@
-use num_traits::{
-    One, PrimInt, ToPrimitive, Unsigned, WrappingAdd, WrappingMul, WrappingSub, Zero,
-};
+use num_traits::{PrimInt, Unsigned, WrappingAdd, WrappingMul, WrappingSub};
 use std::cmp::{max, min};
 use std::ops::{BitAnd, BitOr, BitXor, Not, Shl, Shr};
 
@@ -31,6 +29,7 @@ pub enum ArithmeticOp {
     MOVE,
     CSEL,
     GTE_ORI,
+    SIGN,
 }
 
 impl ArithmeticOp {
@@ -134,10 +133,11 @@ impl ArithmeticOp {
             ArithmeticOp::NOT => !a,
             ArithmeticOp::MOVE => a,
             ArithmeticOp::CSEL => a,
+            ArithmeticOp::SIGN => a,
         }
     }
 
-    /// 输入一个usize和位宽（8、16、32），自动拆成a, b并计算
+    /// one input of width（8、16、32），auto split to a, b
     pub fn compute_split(&self, input: usize, bitwidth: usize) -> usize {
         match bitwidth {
             8 => {
@@ -162,7 +162,7 @@ impl ArithmeticOp {
         }
     }
 
-    pub fn compute_cipher_plain(&self, input: usize, immediate:usize, bitwidth: usize) -> usize {
+    pub fn compute_cipher_plain(&self, input: usize, immediate: usize, bitwidth: usize) -> usize {
         match bitwidth {
             8 => {
                 let a = input as u8;
@@ -183,7 +183,7 @@ impl ArithmeticOp {
         }
     }
 
-    pub fn compute_plain_cipher(&self, input: usize, immediate:usize, bitwidth: usize) -> usize {
+    pub fn compute_plain_cipher(&self, input: usize, immediate: usize, bitwidth: usize) -> usize {
         match bitwidth {
             8 => {
                 let a = immediate as u8;
@@ -210,7 +210,6 @@ mod tests {
 
     #[test]
     fn test_arithmetic_op_compute_split_8bit() {
-        // 输入低8位=0x34，高8位=0x12
         let input = 0x34u8 as usize | ((0x12u8 as usize) << 8);
         let op = ArithmeticOp::Add;
         assert_eq!(
@@ -230,7 +229,6 @@ mod tests {
 
     #[test]
     fn test_arithmetic_op_compute_split_16bit() {
-        // 输入低16位=0x3456，高16位=0xABCD
         let input = 0x3456u16 as usize | ((0xABCDu16 as usize) << 16);
         let op = ArithmeticOp::Sub;
         assert_eq!(
@@ -247,7 +245,6 @@ mod tests {
 
     #[test]
     fn test_arithmetic_op_compute_split_32bit() {
-        // 输入低32位=0x12345678，高32位=0x9ABCDEF0
         let input = 0x12345678u32 as usize | ((0x9ABCDEF0u32 as usize) << 32);
         let op = ArithmeticOp::XOR;
         assert_eq!(

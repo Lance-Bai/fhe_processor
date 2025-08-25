@@ -1,12 +1,12 @@
 use std::time::{Duration, Instant};
 use criterion::{criterion_group, criterion_main, Criterion, black_box};
-use fhe_processor::{operations::manager::OperationManager, programs::{average::Average_Program, bubble::Bubble_Program, maximum::Maximum_Program, squaresum::Squaresum_Program}, utils::instance::SetI};
+use fhe_processor::{operations::manager::OperationManager, programs::{average::AverageProgram, bubble::BubbleProgram, maximum::MaximumProgram, squaresum::SquaresumProgram}, utils::instance::SetI};
 
 
 fn bench_manager_execute_maximum(c: &mut Criterion) {
     let mut manager = OperationManager::new(*SetI, 6, 8);
-    manager.add_operatoins(Maximum_Program::load_operatonis());
-    manager.set_execution_plan(Maximum_Program::load_programs(5));
+    manager.add_operatoins(MaximumProgram::load_operatonis());
+    manager.set_execution_plan(MaximumProgram::load_programs(5));
 
     manager.load_data(16, 0);
     manager.load_data(4, 1);
@@ -30,8 +30,8 @@ fn bench_manager_execute_maximum(c: &mut Criterion) {
 
 fn bench_manager_execute_bubble(c: &mut Criterion) {
     let mut manager = OperationManager::new(*SetI, 6, 8);
-    manager.add_operatoins(Bubble_Program::load_operatonis());
-    manager.set_execution_plan(Bubble_Program::load_programs(5));
+    manager.add_operatoins(BubbleProgram::load_operatonis());
+    manager.set_execution_plan(BubbleProgram::load_programs(5));
 
     manager.load_data(16, 0);
     manager.load_data(4, 1);
@@ -55,8 +55,8 @@ fn bench_manager_execute_bubble(c: &mut Criterion) {
 
 fn bench_manager_execute_squaresum(c: &mut Criterion) {
     let mut manager = OperationManager::new(*SetI, 7, 8);
-    manager.add_operatoins(Squaresum_Program::load_operatonis());
-    manager.set_execution_plan(Squaresum_Program::load_programs(5));
+    manager.add_operatoins(SquaresumProgram::load_operatonis());
+    manager.set_execution_plan(SquaresumProgram::load_programs(5));
 
     manager.load_data(2, 0);
     manager.load_data(4, 1);
@@ -84,8 +84,8 @@ fn bench_manager_execute_squaresum(c: &mut Criterion) {
 
 fn bench_manager_execute_average(c: &mut Criterion) {
     let mut manager = OperationManager::new(*SetI, 6, 8);
-    manager.add_operatoins(Average_Program::load_operatonis(5));
-    manager.set_execution_plan(Average_Program::load_programs(5));
+    manager.add_operatoins(AverageProgram::load_operatonis(5));
+    manager.set_execution_plan(AverageProgram::load_programs(5));
 
     manager.load_data(2, 0);
     manager.load_data(4, 1);

@@ -40,7 +40,7 @@ pub struct Operation {
     // 只存密文查找表
     pub cipher_lut: Vec<PolynomialList<Vec<u64>>>,
     pub lut_pack_size: usize, // 每个多项式能打包多少张表
-    pub immediate: Option<usize>
+    pub immediate: Option<usize>,
 }
 
 impl Operation {
@@ -53,13 +53,16 @@ impl Operation {
         delta: u64,
         immediate: Option<usize>,
     ) -> Self {
-        if op == ArithmeticOp::MOVE {
+        if matches!(
+            op,
+            ArithmeticOp::MOVE | ArithmeticOp::CSEL | ArithmeticOp::SIGN
+        ) {
             Self {
                 op,
                 op_type,
                 bit_width,
                 chunk_size,
-                cipher_lut: Vec::new(), // MOVE 操作没有查找表
+                cipher_lut: Vec::new(), // 没有查找表
                 lut_pack_size: 0,
                 immediate,
             }
@@ -79,7 +82,7 @@ impl Operation {
                 chunk_size,
                 cipher_lut: Vec::new(), // opmised compare 操作没有查找表
                 lut_pack_size: 0,
-                immediate
+                immediate,
             }
         } else {
             let plain_lut = match op_type {
@@ -111,7 +114,7 @@ impl Operation {
                 chunk_size,
                 cipher_lut,
                 lut_pack_size,
-                immediate
+                immediate,
             }
         }
     }
@@ -166,14 +169,7 @@ impl Operation {
             });
     }
 
-    /// 批量 vertical packing 查表操作
-    ///
-    /// # 参数
-    /// - `ggsw_list`: 用户的 GGSW 密文数组
-    /// - `fft`: FFT 上下文
-    /// - `buffer`: 临时计算缓存
-    /// - `lut_input_size`: 查找表输入位数
-    /// - 返回查表结果密文数组
+
     pub fn vertical_packing_multi_lookup(
         &self,
         lwe_outs: &mut [LweCiphertext<Vec<u64>>],
@@ -214,7 +210,6 @@ impl Operation {
             .iter()
             .zip(lwe_outs.into_chunks(lut_pack_size.min(lut_num)))
         {
-            // tfhe_vertical_packing_lookup(lut, lwe_out, ggsw_list, fft, buffer, lut_input_size);
             let stack = buffer.stack();
             let temp = horizontal_vertical_packing_without_extract(
                 lut.as_view(),
@@ -239,7 +234,6 @@ pub fn horizontal_vertical_packing_without_extract<Scalar: UnsignedTorus + CastI
 ) -> GlweCiphertext<Vec<Scalar>> {
     let polynomial_size = ggsw_list.polynomial_size();
     let glwe_size = ggsw_list.glwe_size();
-    let glwe_dimension = glwe_size.to_glwe_dimension();
 
     // Get the base 2 logarithm (rounded down) of the number of polynomials in the list i.e. if
     // there is one polynomial, the number will be 0

@@ -24,7 +24,7 @@ where
     );
     let mut lwe_secret_key = LweSecretKeyOwned::new_empty_key(Scalar::ZERO, new_dimension);
 
-    // 拷贝旧key的前new_dimension个元素到新key
+    // copy the fitst n elemnet from old to new
     let src = &input_lwe_sk.as_ref()[..new_dimension.0];
     let dst = &mut lwe_secret_key.as_mut()[..new_dimension.0];
     dst.copy_from_slice(src);

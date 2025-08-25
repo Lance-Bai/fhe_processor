@@ -1,1 +1,2 @@
-pub mod Compare;
+pub mod compare;
+pub mod sign;

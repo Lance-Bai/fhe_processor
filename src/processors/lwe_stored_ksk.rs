@@ -414,34 +414,12 @@ pub fn generate_lwe_stored_reused_keyswitch_key<
                 // t = {-B/2, ..., -1, 0, 1, ..., B/2 - 1}
                 let buffer_idx = level_idx * decomp_base + (t + base_half) as usize;
                 let mut tt: Scalar = int_to_scalar(t);
-                // #[cfg(test)]
-                // {
-                //     println!("\ntt: {} -> {:0width$b}", tt, tt, width = Scalar::BITS);
-                // }
+
                 tt *= *input_key_element;
-                // #[cfg(test)]
-                // {
-                //     println!(
-                //         "tt * s({}): -> {:0width$b}",
-                //         *input_key_element,
-                //         tt,
-                //         width = Scalar::BITS
-                //     );
-                // }
+
                 shift = Scalar::BITS - (decomp_base_log.0 * (level_idx+1));
                 tt.shl_assign(shift);
-                // #[cfg(test)]
-                // {
-                //     println!(
-                //         "tt * s << {}: {} -> {:0width$b}",
-                //         shift,
-                //         tt,
-                //         tt,
-                //         width = Scalar::BITS
-                //     );
-                // }
-                // decomposition_plaintexts_buffer.as_mut()[buffer_idx] =
-                //     tt.wrapping_div(ciphertext_modulus.get_power_of_two_scaling_to_native_torus());
+
                 decomposition_plaintexts_buffer.as_mut()[buffer_idx] = tt;
             }
         }
@@ -454,29 +432,9 @@ pub fn generate_lwe_stored_reused_keyswitch_key<
             generator,
         );
 
-        // #[cfg(test)]
-        // {
-        //     let lwe_size = output_lwe_sk.as_view().lwe_dimension().to_lwe_size().0;
-        //     for (i, e) in keyswitch_key_block.as_ref().into_iter().enumerate() {
-        //         if i % lwe_size == 0 {
-        //             if i != 0 {
-        //                 println!();
-        //             }
-        //             print!(
-        //                 "level {}, t {}: ",
-        //                 i / lwe_size / decomp_base,
-        //                 i / lwe_size % decomp_base
-        //             );
-        //         }
-        //         print!("{} ", e);
-        //     }
-        //     println!();
-        // }
+
     }
-    //原始计算流程
-    // *message.0 = DecompositionTerm::new(level, decomp_base_log, *input_key_element)
-    //     .to_recomposition_summand()
-    //     .wrapping_div(ciphertext_modulus.get_power_of_two_scaling_to_native_torus());
+
 }
 
 /// Allocate a new [`LWE stored reused version keyswitch key`](`LweStoredReusedKeyswitchKey`) and fill it with an actual keyswitching

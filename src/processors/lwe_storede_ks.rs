@@ -73,11 +73,6 @@ pub fn stored_reused_keyswitch_lwe_ciphertext<Scalar, KSKCont, InputCont, Output
 
     let decomposition_base: usize = 1 << lwe_keyswitch_key.decomposition_base_log().0;
 
-    // We instantiate a decomposer
-    // let decomposer = SignedDecomposer::new(
-    //     lwe_keyswitch_key.decomposition_base_log(),
-    //     lwe_keyswitch_key.decomposition_level_count(),
-    // );
 
     for (keyswitch_key_block, &input_mask_element) in lwe_keyswitch_key.iter().zip(
         input_lwe_ciphertext

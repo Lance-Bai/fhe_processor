@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use aligned_vec::ABox;
 use concrete_fft::c64;
@@ -21,8 +21,11 @@ use crate::{
         operand::ArithmeticOp,
         operation::{OperandType, Operation},
     },
-    opmized_operations::Compare::{
-        opmized_compare_bothcipher, opmized_compare_cipherplain, opmized_compare_plaincipher,
+    opmized_operations::{
+        compare::{
+            opmized_compare_bothcipher, opmized_compare_cipherplain, opmized_compare_plaincipher,
+        },
+        sign::sign,
     },
     processors::{
         cbs_4_bits::circuit_bootstrapping_4_bits_at_once_rev_tr,
@@ -53,8 +56,8 @@ impl Step {
 pub struct OperationManager {
     pub operations: Vec<Operation>,
     pub execution_plan: Vec<Step>,
-    pub fft: Fft,                      
-    pub boxed_seeder: Box<dyn Seeder>, 
+    pub fft: Fft,
+    pub boxed_seeder: Box<dyn Seeder>,
     pub secret_generator: SecretRandomGenerator<ActivatedRandomGenerator>,
     pub encryption_generator: EncryptionRandomGenerator<ActivatedRandomGenerator>,
 
@@ -67,8 +70,8 @@ pub struct OperationManager {
     pub ss_key: FourierGgswCiphertextList<Vec<c64>>,
 
     pub ggsw_lists: Vec<FourierGgswCiphertextList<Vec<c64>>>,
-    pub lwe_lists: Vec<Vec<LweCiphertext<Vec<u64>>>>, 
-    pub data_len: usize,                              
+    pub lwe_lists: Vec<Vec<LweCiphertext<Vec<u64>>>>,
+    pub data_len: usize,
 }
 
 impl OperationManager {
@@ -94,7 +97,7 @@ impl OperationManager {
         let extract_size = param.extract_size();
         let glwe_size = glwe_dimension.to_glwe_size();
 
-        let mut boxed_seeder = new_seeder(); // 你自己的Seeder构造函数
+        let mut boxed_seeder = new_seeder();
         let seeder = boxed_seeder.as_mut();
 
         let mut secret_generator = SecretRandomGenerator::new(seeder.seed());
@@ -188,8 +191,7 @@ impl OperationManager {
             params: param,
             operations: Vec::new(),
             execution_plan: Vec::new(),
-            // buffer: ComputationBuffers::new(),
-            fft: Fft::new(polynomial_size), // 需要实现这个方法或传入已有的
+            fft: Fft::new(polynomial_size),
             boxed_seeder,
             secret_generator,
             encryption_generator,
@@ -233,7 +235,6 @@ impl OperationManager {
         self.operations.remove(index);
     }
 
-    /// 设置执行步骤
     pub fn set_execution_plan(&mut self, plan: Vec<Step>) {
         self.execution_plan = plan;
     }
@@ -241,7 +242,7 @@ impl OperationManager {
     pub fn load_data(&mut self, data: usize, index: usize) {
         assert!(index < self.lwe_lists.len(), "Index out of bounds");
 
-        // 假设 map_chunks_to_lwe 返回 Vec<(&mut LweCiphertext<Vec<u64>>, u64)>
+        // map_chunks_to_lwe return Vec<(&mut LweCiphertext<Vec<u64>>, u64)>
         let mapping = map_chunks_to_lwe_mut(
             &mut self.lwe_lists,
             index,
@@ -253,7 +254,7 @@ impl OperationManager {
         for (lwe, chunk) in mapping {
             encrypt_lwe_ciphertext(
                 &self.glwe_sk.as_lwe_secret_key(),
-                lwe, // 这里直接是 &mut LweCiphertext<_>
+                lwe,
                 Plaintext(chunk << (u64::BITS as usize - self.params.message_size())),
                 self.params.glwe_modular_std_dev(),
                 &mut self.encryption_generator,
@@ -280,7 +281,7 @@ impl OperationManager {
         result
     }
 
-    /// 执行整条流水线
+    /// execute the whole pipline
     pub fn execute(&mut self) {
         for step in &self.execution_plan {
             let op = &self.operations[step.op_index];
@@ -289,8 +290,57 @@ impl OperationManager {
                 _ => false,
             };
             match (op.op, op.bit_width) {
-                (ArithmeticOp::CSEL,_)=>{
-                    
+                (ArithmeticOp::CSEL, _) => {}
+                (ArithmeticOp::SIGN, _) => {
+                    let fourier_bsk_view = self.fourier_bsk.as_view();
+                    let auto_keys = &self.auto_keys;
+                    let ss_key_view = self.ss_key.as_view();
+                    let ksk = &self.ksk;
+                    let params = &self.params;
+
+                    let lwe0 = self.lwe_lists[step.input_indices[0]].as_slice();
+                    let lwe1_opt = match op.op_type {
+                        OperandType::BothCipher => {
+                            Some(self.lwe_lists[step.input_indices[1]].as_slice())
+                        }
+                        _ => None,
+                    };
+
+                    let mut ggsw_lists = std::mem::take(&mut self.ggsw_lists);
+
+                    let total_lwe = lwe0.len() + lwe1_opt.map_or(0, |s| s.len());
+
+                    ggsw_lists
+                        .par_iter_mut()
+                        .enumerate()
+                        .take(total_lwe)
+                        .for_each(|(i, ggsw)| {
+                            let lwe = if i < lwe0.len() {
+                                &lwe0[i]
+                            } else {
+                                &lwe1_opt.unwrap()[i - lwe0.len()]
+                            };
+
+                            circuit_bootstrapping_4_bits_at_once_rev_tr(
+                                lwe,
+                                ggsw,
+                                fourier_bsk_view,
+                                auto_keys,
+                                ss_key_view,
+                                ksk,
+                                params,
+                            );
+                        });
+
+                    self.ggsw_lists = ggsw_lists;
+                    let temp = self.ggsw_lists.clone();
+                    let input = concat_ggsw_lists(temp, false);
+                    sign(
+                        &input,
+                        self.lwe_lists[step.output_index].as_mut_slice(),
+                        op.immediate.unwrap(),
+                        &self.fft,
+                    );
                 }
                 (ArithmeticOp::MOVE, _) => {
                     let temp = self.lwe_lists[step.input_indices[0]].clone();
@@ -303,7 +353,6 @@ impl OperationManager {
                     continue;
                 }
 
-                // 多个匹配型 + 范围条件
                 (x, y)
                     if matches!(
                         x,
@@ -320,7 +369,6 @@ impl OperationManager {
                     let ksk = &self.ksk;
                     let params = &self.params;
 
-                    // 3) 取出参与的 LWE 切片
                     let lwe0 = self.lwe_lists[step.input_indices[0]].as_slice();
                     let lwe1_opt = match op.op_type {
                         OperandType::BothCipher => {
@@ -329,32 +377,22 @@ impl OperationManager {
                         _ => None,
                     };
 
-                    // 4) 拿走 ggsw_lists 的所有权，避免 &mut self 的别名问题
-                    //    （如果后面还要用回 self.ggsw_lists，最后再赋回）
                     let mut ggsw_lists = std::mem::take(&mut self.ggsw_lists);
 
-                    // 5) 断言长度匹配：lwe 总数必须等于 ggsw 数
                     let total_lwe = lwe0.len() + lwe1_opt.map_or(0, |s| s.len());
-                    // assert_eq!(ggsw_lists.len(), total_lwe, "LWE 数量与 GGSW 数量不一致");
-
-                    // 6) 并行执行：按 ggsw 的索引 i 取对应的 lwe 引用
                     ggsw_lists
                         .par_iter_mut()
                         .enumerate()
                         .take(total_lwe)
                         .for_each(|(i, ggsw)| {
-                            // 选择第 i 个 LWE：可能来自第一个切片或第二个切片
                             let lwe = if i < lwe0.len() {
                                 &lwe0[i]
                             } else {
-                                // 安全：上面 total_lwe 已经匹配长度
                                 &lwe1_opt.unwrap()[i - lwe0.len()]
                             };
-
-                            // 计算（每个线程只改它拿到的 ggsw；其余参数仅只读共享）
                             circuit_bootstrapping_4_bits_at_once_rev_tr(
                                 lwe,
-                                ggsw, // 已是 &mut
+                                ggsw,
                                 fourier_bsk_view,
                                 auto_keys,
                                 ss_key_view,
@@ -408,8 +446,6 @@ impl OperationManager {
                     let ss_key_view = self.ss_key.as_view();
                     let ksk = &self.ksk;
                     let params = &self.params;
-
-                    // 3) 取出参与的 LWE 切片
                     let lwe0 = self.lwe_lists[step.input_indices[0]].as_slice();
                     let lwe1_opt = match op.op_type {
                         OperandType::BothCipher => {
@@ -417,33 +453,23 @@ impl OperationManager {
                         }
                         _ => None,
                     };
-
-                    // 4) 拿走 ggsw_lists 的所有权，避免 &mut self 的别名问题
-                    //    （如果后面还要用回 self.ggsw_lists，最后再赋回）
                     let mut ggsw_lists = std::mem::take(&mut self.ggsw_lists);
 
-                    // 5) 断言长度匹配：lwe 总数必须等于 ggsw 数
                     let total_lwe = lwe0.len() + lwe1_opt.map_or(0, |s| s.len());
-                    // assert_eq!(ggsw_lists.len(), total_lwe, "LWE 数量与 GGSW 数量不一致");
-
-                    // 6) 并行执行：按 ggsw 的索引 i 取对应的 lwe 引用
                     ggsw_lists
                         .par_iter_mut()
                         .enumerate()
                         .take(total_lwe)
                         .for_each(|(i, ggsw)| {
-                            // 选择第 i 个 LWE：可能来自第一个切片或第二个切片
                             let lwe = if i < lwe0.len() {
                                 &lwe0[i]
                             } else {
-                                // 安全：上面 total_lwe 已经匹配长度
                                 &lwe1_opt.unwrap()[i - lwe0.len()]
                             };
 
-                            // 计算（每个线程只改它拿到的 ggsw；其余参数仅只读共享）
                             circuit_bootstrapping_4_bits_at_once_rev_tr(
                                 lwe,
-                                ggsw, // 已是 &mut
+                                ggsw,
                                 fourier_bsk_view,
                                 auto_keys,
                                 ss_key_view,
@@ -452,7 +478,6 @@ impl OperationManager {
                             );
                         });
 
-                    // 7) 放回 self（如果后续还要用）
                     let temp_ggsw_lists = ggsw_lists.clone();
                     self.ggsw_lists = ggsw_lists;
 
@@ -473,7 +498,7 @@ pub fn concat_ggsw_lists(
     lists: Vec<FourierGgswCiphertextList<Vec<c64>>>,
     is_both_cipher: bool,
 ) -> FourierGgswCiphertextList<Vec<c64>> {
-    assert!(!lists.is_empty(), "GGSW list不能为空");
+    assert!(!lists.is_empty(), "GGSW lis can not be empty");
 
     let glwe_size = lists[0].glwe_size();
     let decomposition_level_count = lists[0].decomposition_level_count();
@@ -486,13 +511,13 @@ pub fn concat_ggsw_lists(
     if is_both_cipher {
         for list in lists {
             total_count += list.count();
-            all_data.extend_from_slice(&list.data()); // 此处 data() move 掉 list
+            all_data.extend_from_slice(&list.data());
         }
     } else {
         let half = lists.len() / 2;
         for list in lists.into_iter().take(half) {
             total_count += list.count();
-            all_data.extend_from_slice(&list.data()); // 此处 data() move 掉 list
+            all_data.extend_from_slice(&list.data());
         }
     }
 
@@ -507,14 +532,17 @@ pub fn concat_ggsw_lists(
 }
 
 pub fn split_bits_high_to_low(value: usize, data_len: usize, message_size: usize) -> Vec<u64> {
-    assert!(message_size > 0, "message_size 必须大于 0");
-    assert!(data_len > 0, "data_len 必须大于 0");
-    assert!(data_len <= usize::BITS as usize, "data_len 超过 usize 位宽");
+    assert!(message_size > 0, "message_size must > 0");
+    assert!(data_len > 0, "data_len must > 0");
+    assert!(
+        data_len <= usize::BITS as usize,
+        "data_len over usize width"
+    );
 
-    let mask = (1usize << data_len) - 1; // 取低 data_len 位
+    let mask = (1usize << data_len) - 1;
     let val = value & mask;
 
-    let num_chunks = (data_len + message_size - 1) / message_size; // 向上取整
+    let num_chunks = (data_len + message_size - 1) / message_size;
     let mut chunks = Vec::with_capacity(num_chunks);
 
     for i in (0..num_chunks).rev() {
@@ -533,15 +561,11 @@ pub fn map_chunks_to_lwe<'a>(
     data_len: usize,
     message_size: usize,
 ) -> Vec<(&'a LweCiphertext<Vec<u64>>, u64)> {
-    // 1. 分块
     let chunks = split_bits_high_to_low(value, data_len, message_size);
 
-    // 2. 取内部 Vec
-    let lwe_vec = lwe_lists.get(list_index).expect("list_index 越界");
+    let lwe_vec = lwe_lists.get(list_index).expect("list_index overflow");
 
-    assert_eq!(lwe_vec.len(), chunks.len(), "LWE 个数和分块数不一致");
-
-    // 3. 高位块对应第一个 LWE
+    assert_eq!(lwe_vec.len(), chunks.len(), "LWE number blocks miss match");
     lwe_vec.iter().zip(chunks.into_iter()).collect()
 }
 
@@ -552,14 +576,11 @@ pub fn map_chunks_to_lwe_mut<'a>(
     message_size: usize,
     extract_size: usize,
 ) -> Vec<(&'a mut LweCiphertext<Vec<u64>>, u64)> {
-    // 1. 分块
     let chunks = split_bits_high_to_low(value, message_size, extract_size);
 
-    // 2. 取内部 Vec
-    let lwe_vec = lwe_lists.get_mut(list_index).expect("list_index 越界");
+    let lwe_vec = lwe_lists.get_mut(list_index).expect("list_index overflow");
 
-    assert_eq!(lwe_vec.len(), chunks.len(), "LWE 个数和分块数不一致");
+    assert_eq!(lwe_vec.len(), chunks.len(), "LWE number blocks miss match");
 
-    // 3. 高位块对应第一个 LWE
     lwe_vec.iter_mut().zip(chunks.into_iter()).collect()
 }

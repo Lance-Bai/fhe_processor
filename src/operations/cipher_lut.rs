@@ -14,20 +14,24 @@ use tfhe::{
         ComputationBuffers, Fft, FourierGgswCiphertextList, LweCiphertext, PolynomialList,
     },
 };
-/// 将多个查找表分别打包为密文查找表（每个查找表独立生成一个 PolynomialList）
+/// Pack multiple lookup tables into encrypted lookup tables 
+/// (each lookup table is independently generated as a `PolynomialList`).
 ///
-/// # 参数
-/// - `tables`: 多个查找表，每个元素是一个查找表（例如不同chunk分表或不同功能表）
-/// - `polynomial_size`: 多项式阶数（每个GLWE多项式能装多少个元素）
-/// - `delta`: 放大倍数（TFHE编码用）
+/// # Parameters
+/// - `tables`: A collection of lookup tables, where each element is one table 
+///   (e.g., different chunked sub-tables or different functional tables).
+/// - `polynomial_size`: The polynomial degree (how many elements can fit 
+///   in each GLWE polynomial).
+/// - `delta`: Scaling factor (used in TFHE encoding).
 ///
-/// # 返回
-/// - `Vec<PolynomialList<Vec<u64>>>`: 每个查找表分别生成的密文查找表
+/// # Returns
+/// - `Vec<PolynomialList<Vec<u64>>>`: A vector of encrypted lookup tables, 
+///   where each table corresponds to one `PolynomialList`.
 ///
-/// # 用法
+/// # Example
 /// ```ignore
 /// let lut_lists = generate_lut_from_vecs(&split_tables, PolynomialSize(1024), 1 << 40);
-/// // lut_lists[i] 就是第 i 个查找表的密文查找表（PolynomialList）
+/// // `lut_lists[i]` is the encrypted lookup table (PolynomialList) for the i-th table.
 /// ```
 pub fn generate_lut_from_vecs(
     tables: &[Vec<usize>],
@@ -38,10 +42,8 @@ pub fn generate_lut_from_vecs(
 
     for (table_idx, table) in tables.iter().enumerate() {
         let table_len = table.len();
-        // 需要多少个多项式（每个多项式 polynomial_size.0 个元素，最后一个可能补0）
         let num_poly = (table_len + polynomial_size.0 - 1) / polynomial_size.0;
 
-        // 先将所有多项式拼成一个一维向量（Concrete/TFHE标准格式）
         let mut flat: Vec<u64> = Vec::with_capacity(num_poly * polynomial_size.0);
 
         for poly_idx in 0..num_poly {
@@ -56,7 +58,6 @@ pub fn generate_lut_from_vecs(
             }
         }
 
-        // 构造 PolynomialList，flat 按多项式顺序拼接
         let poly_list = PolynomialList::from_container(flat, polynomial_size);
         result.push(poly_list);
     }
@@ -83,7 +84,7 @@ pub fn generate_lut_from_vecs_auto(
     let n = polynomial_size.0;
     let per_poly_capacity = n / table_len;
 
-    // =============== 情况 1：无法打包（一个表需要拆成多项式）===============
+    // no packing
     if per_poly_capacity < 1 {
         let mut result = Vec::with_capacity(tables.len());
 
@@ -112,26 +113,22 @@ pub fn generate_lut_from_vecs_auto(
         return (result, 1);
     }
 
-    // ==================== 情况 2：可打包（一个 poly 放多张表） ====================
-    // 改动点：将每组打包（最多 per_poly_capacity 张表）生成一个独立的 PolynomialList，
-    // 且该 PolynomialList 里只含 1 个 poly（长度 = n）
+    // with packing
     let total_tables = tables.len();
     let num_groups = (total_tables + per_poly_capacity - 1) / per_poly_capacity;
 
     let mut result = Vec::with_capacity(num_groups);
 
     for g in 0..num_groups {
-        // 为该组准备一个单-poly 的扁平存储（未占用处为 0）
         let mut flat = vec![0u64; n];
 
-        // 本组中最多 per_poly_capacity 张表
         for s in 0..per_poly_capacity {
             let table_idx = g * per_poly_capacity + s;
             if table_idx >= total_tables {
                 break;
             }
 
-            // 将该表拷贝到本 poly 的对应分区 [s*table_len .. s*table_len + table_len)
+            // copy to [s*table_len .. s*table_len + table_len)
             let slot_base = s * table_len;
             let table = &tables[table_idx];
 
@@ -141,25 +138,27 @@ pub fn generate_lut_from_vecs_auto(
         }
 
         let poly_list = PolynomialList::from_container(flat, polynomial_size);
-        // 注意：此时 poly_list 中只有 1 个多项式（因为 container 长度正好 = n）
+        //now poly_list contain 1 poly only
         result.push(poly_list);
     }
 
     (result, per_poly_capacity)
 }
 
-/// 单查找表的TFHE vertical_packing查值函数
+/// TFHE vertical_packing lookup function for a single lookup table
 ///
-/// # 参数
-/// - `lut`: 查找表（PolynomialList）
-/// - `lwe_out`: 输出密文（LweCiphertext，mutable）
-/// - `ggsw_list`: GGSW密钥组
-/// - `fft`: FFT上下文
-/// - `buffer`: 临时scratch buffer
-/// - `lut_input_size`: 查找表输入bit数（或总输入数），需与GLWE参数对应
+/// # Parameters
+/// - `lut`: The lookup table (`PolynomialList`)
+/// - `lwe_out`: Output ciphertext (`LweCiphertext`, mutable)
+/// - `ggsw_list`: GGSW key list
+/// - `fft`: FFT context
+/// - `buffer`: Temporary scratch buffer
+/// - `lut_input_size`: Number of input bits (or total inputs) for the lookup table; 
+///   must match the GLWE parameters
 ///
-/// # 功能
-/// 用vertical_packing做一次完整查找表查值。查找结果写入lwe_out。
+/// # Description
+/// Performs a complete lookup using vertical_packing. 
+/// The result is written into `lwe_out`.
 pub fn tfhe_vertical_packing_lookup(
     lut: &PolynomialList<Vec<u64>>,
     lwe_out: &mut LweCiphertext<Vec<u64>>,
@@ -191,12 +190,12 @@ pub fn tfhe_vertical_packing_lookup(
     );
 }
 
-/// 多查找表批量vertical_packing查值
+/// Batch vertical_packing lookup for multiple lookup tables
 ///
-/// # 参数
-/// - `luts`: 查找表数组（每个PolynomialList）
-/// - `lwe_outs`: 输出密文数组（每个LweCiphertext）
-/// - 其它同上
+/// # Parameters
+/// - `luts`: Array of lookup tables (each a `PolynomialList`)
+/// - `lwe_outs`: Array of output ciphertexts (each an `LweCiphertext`)
+/// - Others: Same as above
 pub fn tfhe_vertical_packing_multi_lookup(
     luts: &[PolynomialList<Vec<u64>>],
     lwe_outs: &mut [LweCiphertext<Vec<u64>>],

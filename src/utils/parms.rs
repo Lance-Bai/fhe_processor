@@ -15,15 +15,9 @@ pub struct ProcessorParam<Scalar: UnsignedInteger> {
     pbs_level: DecompositionLevelCount,
     ks_base_log: DecompositionBaseLog,
     ks_level: DecompositionLevelCount,
-    glwe_ds_to_large_base_log: DecompositionBaseLog,
-    glwe_ds_to_large_level: DecompositionLevelCount,
-    fft_type_to_large: FftType,
     auto_base_log: DecompositionBaseLog,
     auto_level: DecompositionLevelCount,
     fft_type_auto: FftType,
-    glwe_ds_from_large_base_log: DecompositionBaseLog,
-    glwe_ds_from_large_level: DecompositionLevelCount,
-    fft_type_from_large: FftType,
     ss_base_log: DecompositionBaseLog,
     ss_level: DecompositionLevelCount,
     cbs_base_log: DecompositionBaseLog,
@@ -47,15 +41,9 @@ impl<Scalar: UnsignedInteger> ProcessorParam<Scalar> {
         pbs_level: DecompositionLevelCount,
         ks_base_log: DecompositionBaseLog,
         ks_level: DecompositionLevelCount,
-        glwe_ds_to_large_base_log: DecompositionBaseLog,
-        glwe_ds_to_large_level: DecompositionLevelCount,
-        fft_type_to_large: FftType,
         auto_base_log: DecompositionBaseLog,
         auto_level: DecompositionLevelCount,
         fft_type_auto: FftType,
-        glwe_ds_from_large_base_log: DecompositionBaseLog,
-        glwe_ds_from_large_level: DecompositionLevelCount,
-        fft_type_from_large: FftType,
         ss_base_log: DecompositionBaseLog,
         ss_level: DecompositionLevelCount,
         cbs_base_log: DecompositionBaseLog,
@@ -77,15 +65,9 @@ impl<Scalar: UnsignedInteger> ProcessorParam<Scalar> {
             pbs_level,
             ks_base_log,
             ks_level,
-            glwe_ds_to_large_base_log,
-            glwe_ds_to_large_level,
-            fft_type_to_large,
             auto_base_log,
             auto_level,
             fft_type_auto,
-            glwe_ds_from_large_base_log,
-            glwe_ds_from_large_level,
-            fft_type_from_large,
             ss_base_log,
             ss_level,
             cbs_base_log,
@@ -131,30 +113,6 @@ impl<Scalar: UnsignedInteger> ProcessorParam<Scalar> {
 
     pub fn pbs_level(&self) -> DecompositionLevelCount {
         self.pbs_level
-    }
-
-    pub fn glwe_ds_to_large_base_log(&self) -> DecompositionBaseLog {
-        self.glwe_ds_to_large_base_log
-    }
-
-    pub fn glwe_ds_to_large_level(&self) -> DecompositionLevelCount {
-        self.glwe_ds_to_large_level
-    }
-
-    pub fn fft_type_to_large(&self) -> FftType {
-        self.fft_type_to_large
-    }
-
-    pub fn glwe_ds_from_large_base_log(&self) -> DecompositionBaseLog {
-        self.glwe_ds_from_large_base_log
-    }
-
-    pub fn glwe_ds_from_large_level(&self) -> DecompositionLevelCount {
-        self.glwe_ds_from_large_level
-    }
-
-    pub fn fft_type_from_large(&self) -> FftType {
-        self.fft_type_from_large
     }
 
     pub fn ks_base_log(&self) -> DecompositionBaseLog {
