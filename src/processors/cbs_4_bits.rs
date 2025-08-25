@@ -1,6 +1,6 @@
 use aligned_vec::{ABox, ConstAlign};
 use refined_tfhe_lhe::{AutomorphKey, FourierGlweKeyswitchKey};
-use std::{collections::HashMap, time::Instant};
+use std::collections::HashMap;
 use tfhe::core_crypto::{
     fft_impl::fft64::{c64, crypto::bootstrap::FourierLweBootstrapKeyView},
     prelude::*,

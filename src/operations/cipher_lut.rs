@@ -2,7 +2,7 @@ use tfhe::core_crypto::{
     fft_impl::fft64::{
         c64,
         crypto::wop_pbs::{
-            blind_rotate_assign, cmux_tree_memory_optimized, vertical_packing,
+            vertical_packing,
             vertical_packing_scratch,
         },
     },
