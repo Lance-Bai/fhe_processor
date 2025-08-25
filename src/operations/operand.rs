@@ -28,7 +28,7 @@ pub enum ArithmeticOp {
     NOT,
     MOVE,
     CSEL,
-    GTE_ORI,
+    GTEO,
     SIGN,
 }
 
@@ -102,7 +102,7 @@ impl ArithmeticOp {
                     T::zero()
                 }
             }
-            ArithmeticOp::GTE_ORI => {
+            ArithmeticOp::GTEO => {
                 if a >= b {
                     T::one()
                 } else {

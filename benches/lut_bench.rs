@@ -17,7 +17,6 @@ use fhe_processor::processors::key_gen::allocate_and_generate_new_reused_lwe_key
 use fhe_processor::processors::lwe_stored_ksk::{
     allocate_and_generate_new_stored_reused_lwe_keyswitch_key, LweStoredReusedKeyswitchKey,
 };
-use fhe_processor::utils::instance::{SetI_large};
 use fhe_processor::{utils::instance::SetI, utils::parms::ProcessorParam};
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::iter::{

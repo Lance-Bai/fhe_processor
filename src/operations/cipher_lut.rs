@@ -6,7 +6,6 @@ use tfhe::core_crypto::{
             vertical_packing_scratch,
         },
     },
-    prelude::*,
 };
 use tfhe::{
     boolean::prelude::PolynomialSize,
@@ -40,7 +39,7 @@ pub fn generate_lut_from_vecs(
 ) -> Vec<PolynomialList<Vec<u64>>> {
     let mut result = Vec::with_capacity(tables.len());
 
-    for (table_idx, table) in tables.iter().enumerate() {
+    for (_, table) in tables.iter().enumerate() {
         let table_len = table.len();
         let num_poly = (table_len + polynomial_size.0 - 1) / polynomial_size.0;
 
@@ -167,6 +166,7 @@ pub fn tfhe_vertical_packing_lookup(
     buffer: &mut ComputationBuffers,
     lut_input_size: usize,
 ) {
+    let _ = lut_input_size;
     // 确保buffer大小足够
     buffer.resize(
         vertical_packing_scratch::<u64>(

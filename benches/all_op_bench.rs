@@ -86,7 +86,6 @@ fn bench_one_combo(c: &mut Criterion, label: &str, op: ArithmeticOp, operand: Op
                     OperandType::PlainCipher | OperandType::CipherPlain => {
                         manager.load_data(a as usize, 0);
                     }
-                    _ => {}
                 }
 
                 let t0 = Instant::now();

@@ -30,7 +30,7 @@ const CASES: &[BenchCase] = &[
 
     // ---- GTE_ORI 16/32 bit ----
     // BenchCase { bit_len: 16, op: ArithmeticOp::GTE_ORI, mode: OperandType::BothCipher, plain_val: None, name: "GTE_ORI (CC) 16bit" },
-    BenchCase { bit_len: 16, op: ArithmeticOp::GTE_ORI, mode: OperandType::CipherPlain, plain_val: Some(PLAIN_VAL), name: "GTE_ORI (CP) 16bit" },
+    BenchCase { bit_len: 16, op: ArithmeticOp::GTEO, mode: OperandType::CipherPlain, plain_val: Some(PLAIN_VAL), name: "GTE_ORI (CP) 16bit" },
     // BenchCase { bit_len: 32, op: ArithmeticOp::GTE_ORI, mode: OperandType::CipherPlain, plain_val: Some(PLAIN_VAL), name: "GTE_ORI (CP) 32bit" },
 ];
 

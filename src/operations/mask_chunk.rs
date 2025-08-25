@@ -52,12 +52,6 @@ pub fn masking_chunk_msb_decode(encoded: usize, chunk_size: usize, total_bits: u
     vec_to_usize(&input_bits[..total_bits])
 }
 
-// fn vec_to_usize(bits: &[usize]) -> usize {
-//     bits.iter()
-//         .enumerate()
-//         .fold(0, |acc, (i, &b)| acc | (b << i))
-// }
-
 pub fn usize_to_vec(mut n: usize, len: usize) -> Vec<usize> {
     let mut bits = vec![0; len];
     for i in 0..len {
@@ -67,7 +61,6 @@ pub fn usize_to_vec(mut n: usize, len: usize) -> Vec<usize> {
     bits
 }
 
-/// bit向量转usize（低位在前）
 pub fn vec_to_usize(bits: &[usize]) -> usize {
     let mut n = 0usize;
     for (i, &b) in bits.iter().enumerate() {
