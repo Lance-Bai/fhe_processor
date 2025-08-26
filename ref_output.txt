@@ -1,0 +1,211 @@
+../bin/tches 42 5 12 203 127
+
+Key Generation in progress... (it should take about a minute)
+Key Generation is over!
+Additions
+  ADD: 42 + 5 = 47
+  timing: 0.52010
+  ADDi: 42 + 5 = 47
+  timings : 0.14015
+  ADDZ: 42 + 0 = 42
+  timing: 0.27892
+
+Multiplications
+  MUL: 42 * 5 = 210
+  timing: 0.75908
+  MULi: 42 * 5 = 210
+  timing: 0.14415
+  MULM: 42 * 5 = 0
+  timings : 2.54265
+  MULMi: 42 * 5 = 0
+  timings : 0.20610
+
+Minimum
+  MIN(42, 5) = 5
+  timing: 1.24084
+  MINi(42, 5) = 5
+  timing: 0.19817
+
+Maximum
+  MAX(42, 5) = 42
+  timing: 1.24556
+  MAXi(42, 5) = 42
+  timing: 0.22697
+
+Subtraction
+  SUB: 42 - 5 = 37
+  timing: 0.52235
+  SUBi: 42 - 5 = 37
+  timing: 0.14090
+
+XOR
+  XOR: 42 XOR 5 = 47
+  timing: 0.27726
+  XORi: 42 XOR 5 = 47
+  timing: 0.07050
+
+AND
+  AND: 42 AND 5 = 0
+  timing: 0.27336
+  ANDi: 42 AND 5 = 0
+  timing: 0.06950
+
+OR
+  ORi: 42 OR 5 = 47
+  timing: 0.27943
+  ORi: 42 OR 5 = 47
+  timing: 0.07037
+
+Left shift
+  SHLi: 42<<3 = 80
+  timing: 0.10602
+  SHL: 42<<5 = 64
+  timing: 0.48172
+Left rotation
+  ROL: 42<<<0 = 42
+  timing: 0.72430
+  ROLi: 42<<<0 = 42
+  timing: 0.13757
+
+Right shift
+  SHRi: 42>>3 = 5 
+  timing: 0.10582
+  SHR: 42>>0 = 42
+  timing: 0.48476
+
+Right rotation
+  ROR: 42>>>0 = 42
+  timing: 0.72475
+  RORi: 42>>>0 = 42
+  timing: 0.13751
+
+DIV4
+  DIV4: 42/5 = 8 (should be 8)
+  timing: 1.68779
+  DIV4i: 42/5 = 8 (should be 8)
+  timing: 0.22893
+
+Division
+  DIV: 42/5 = 8 (should be 8)
+  timing: 7.62397
+  DIV: 5/42 = 0 (should be 0)
+  timing: 7.61468
+  DIVi: 42/5 = 8 (should be 8)
+  timing: 0.23365
+  DIVi: 42/5 = 8 (should be 8)
+  timing: 0.22916
+
+Modulo 
+  MOD: 42 mod(5) = 2 (should be 2)
+  timing: 7.05072
+  MODi: 42 mod(5) = 2 (should be 2)
+  timing: 0.21134
+
+  MOD4: 42 mod(5) = 2 (should be 2)
+  timing: 0.83786
+  MOD4i: 42 mod(5) = 2 (should be 2)
+  timing: 0.13456
+
+Test zero
+  TZR : 42 =? 0 ==> 0
+  timing: 0.10624
+  TZR : 0 =? 0 ==> 1
+  timing: 0.10560
+
+Equality test
+  EQi: 42 =? 5 ==> 0
+  timing: 0.10728
+  EQi: 42 =? 42 ==> 1
+  timing: 0.10489
+  EQ: 42 =? 5 ==> 0
+  timing: 0.39575
+  EQ: 42 =? 42 ==> 1
+  timing: 0.39639
+
+Comparisons 
+  GT: 42 >? 5 ==> 1
+  timing: 0.62483
+  GTE: 42 >=? 5 ==> 1
+  timing: 0.62899
+  LT: 42 <? 5 ==> 0
+  timing: 0.62499
+  LT: 5 <? 42 ==> 1
+  timing: 0.62227
+  LTEi: 42 <=? 42 ==> 1
+  timing: 0.11142
+
+Conditional Affectation 
+  CDUP(1, 5)  = 5
+  timing: 0.16129
+  CDUP(0, 5)  = 0
+  timing: 0.16151
+  CDUPi(1, 5)  = 5
+  timing: 0.03172
+  NCDUP(42, 5)  = 0
+  timing: 0.16092
+  NCDUP(0, 5)  = 5
+  timing: 0.16072
+  NCDUP(1, 5)  = 0
+  timing: 0.16130
+
+CSEL
+  CSEL(1, 42, 5)  = 42
+  timing: 0.68960
+
+  CSEL(0, 42, 5)  = 5
+  timing: 0.68838
+
+Absolute value 
+  ABS(42) = 42
+  timing: 0.21725
+  ABS(5) = 5
+  timing: 0.21800
+
+Negation
+  NEG(5) = -5
+  timing: 0.21672
+  NEG(42) = -42
+  timing: 0.21684
+
+/****************************************************************************/
+Now we execute several algorithm on Table [ 42 5 12 203 127 ]
+Bubble sort
+Sorted Array: 5 12 42 127 203 
+timing : 17.94441
+
+Maximum of Array 
+Maximum of Array: 203
+ timing : 4.75305
+
+Average of Array
+Average: 26.60156 (should be 26.600000)
+timing : 2.42419
+
+Squares Sum
+Squares Sum: 135 (should be 135)
+ timing : 5.58872
+
+Array Assignment: we assign an encryption of 0 in position 1.
+New Array: 42 0 12 203 127 
+timing : 3.45376
+
+/****************************************************************************/
+Now, we test some 16-bit fixed-point arithmetic operations.
+Decimal Addition of two encrypted 16-bit values
+  0.123450 + 0.067890 = 0.187500 (should be close to 0.191340)
+  timing : 1.53652
+
+MULi_16
+  0.067890 * 0.123450 = 0.007812 (should be close to 0.008381)
+  timing : 3.84979
+
+Neuron evaluation with sigmoid
+  Neuron(0.123450, 0.067890) = sigmoid(0.123450*0.75 + 0.067890*0.125) = 0.523438 (should be close to 0.525247)
+  timing : 16.88984
+
+Neuron evaluation with Heaviside
+  Neuron(0.123450, 0.067890) = heaviside(0.123450*0.75 + 0.067890*0.125) = 1.000000 (should be close to 1.000000)
+  timing : 9.93208
+
+done
+
