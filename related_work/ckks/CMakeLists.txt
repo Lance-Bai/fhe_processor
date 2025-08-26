@@ -34,10 +34,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(BUILD_UNITTESTS ON)
+set(BUILD_UNITTESTS OFF)
 set(BUILD_EXAMPLES ON)
-set(BUILD_BENCHMARKS ON)
-set(BUILD_EXTRAS ON)
+set(BUILD_BENCHMARKS OFF)
+set(BUILD_EXTRAS OFF)
 
 
 #--------------------------------------------------------------------
@@ -69,9 +69,9 @@ if ( EMSCRIPTEN )
 else()
     option( BUILD_SHARED "Set to ON to build shared versions of the library"         ON  )
     option( BUILD_STATIC "Set to ON to build static versions of the library"         OFF )
-    option( BUILD_UNITTESTS "Set to ON to build unit tests for the library"          ON  )
+    option( BUILD_UNITTESTS "Set to ON to build unit tests for the library"          OFF  )
     option( BUILD_EXAMPLES "Set to ON to build examples for the library"             ON  )
-    option( BUILD_BENCHMARKS "Set to ON to build benchmarks for the library"         ON  )
+    option( BUILD_BENCHMARKS "Set to ON to build benchmarks for the library"         OFF  )
     option( WITH_OPENMP "Use OpenMP to enable <omp.h>"                               ON  )
 endif()
 

@@ -38,7 +38,7 @@ using namespace lbcrypto;
 void FuncBootstrapExample(std::function<double(double)> f, int bits, int p);
 
 int main(int argc, char* argv[]) {
-    int bits = 4;
+    int bits = 8;
     // p will determine the plaintext space, which is [0..p-1]
     int p = pow(2, bits);
 
@@ -57,8 +57,10 @@ void FuncBootstrapExample(std::function<double(double)> f, int bits, int p) {
 
     // For secure computations, use parameters.SetSecurityLevel(HEStd_128_classic);
     // and remove the two lines below.
-    parameters.SetSecurityLevel(HEStd_NotSet);
-    parameters.SetRingDim(1 << 12);
+    // parameters.SetSecurityLevel(HEStd_NotSet);
+    // parameters.SetRingDim(1 << 12);
+    parameters.SetSecurityLevel(HEStd_128_classic);
+
 
     parameters.SetNumLargeDigits(3);
     parameters.SetKeySwitchTechnique(HYBRID);
@@ -121,9 +123,15 @@ void FuncBootstrapExample(std::function<double(double)> f, int bits, int p) {
     // Order of the hermite interpolation, should be between 1 and 3
     int hermite_order = 1;
 
+
+    using clock = std::chrono::steady_clock; // 单调递增，适合计时
+    auto t0 = clock::now();
     // We evaluate f(ctxt) while bootstrapping
     auto ctxtResult = cc->EvalFuncBootstrap(ctxt, f, p, hermite_order);
-
+    auto t1 = clock::now();
+    auto ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    std::cout << "Elapsed: " << ms << " ms\n";
+    
     Plaintext result;
     cc->Decrypt(keyPair.secretKey, ctxtResult, &result);
     result->SetLength(p);

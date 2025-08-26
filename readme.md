@@ -137,70 +137,67 @@ RAYON_NUM_THREADS=1 cargo bench --bench large_op_bench
 
 ## [Related Work](./related_work/)
 
-We include three public baselines under `./related_work/` to compare with our framework.
-Each baseline is evaluated using its own benchmarks; we follow their procedures and report the relevant timings. For each 
+We include several public baselines under `./related_work/`. Each baseline is evaluated using its own artifact/benchmarks, and we report the corresponding timing.
 
-### [PBS-based LUT (ccs24)](./related_work/ccs24/README_CCS.md)
+### [PBS Method LUT](./related_work/ccs24/README_CCS.md)
 
-Implementation of **programmable bootstrapping (PBS)**–based LUT with high precision.
-We use the authors’ benchmark and take the reported timing as the LUT time.
+Implementation of *programmable bootstrapping (PBS)*–based LUT from  
+**“New Secret Keys for Enhanced Performance in (T)FHE”** ([ePrint 2023/979](https://eprint.iacr.org/2023/979)), enabling high-precision programmable bootstrapping.
 
-**Run:**
+**Run**
 
 ```bash
 make bench_ccs_2024_fft_shrinking_ks
 ```
 
-**Output:**
-The printed time corresponds to the execution time of a single LUT evaluation.
+**Output**
+The reported time corresponds to the LUT evaluation time.
 
 ---
 
-### [CMux-Tree–based LUT (ccs25)](./related_work/ccs25/README.md)
+### [CMux-Tree Method LUT](./related_work/ccs25/README.md)
 
-Implementation of **Refined TFHE LHE**, representing a CMux-tree–based LUT evaluation.
-This artifact benchmarks the pipeline in two parts: (1) input encryption / GGSW extraction, and (2) LUT evaluation.
-We combine these parts to obtain the total n-to-n LUT time.
+Implementation of **“Refined TFHE Leveled Homomorphic Evaluation and Its Application”**
+([ePrint 2024/1318](https://eprint.iacr.org/2024/1318)), representing the state of the art for CMux-tree–based LUT evaluation.
+This artifact reports timings for two stages that we combine to obtain total *n-to-n* LUT time:
 
-**Run (part 1 — 4-bit GGSW extraction):**
+1. **GGSW extraction (input encryption)**
 
-```bash
-cargo bench --bench bench_integer_input_lhe
-```
+   ```bash
+   cargo bench --bench bench_integer_input_lhe
+   ```
 
-Record the time for extracting GGSWs for **4 input bits**.
-For higher input precision **n** (multiple of 4), scale linearly:
+   The printed time corresponds to **4 input bits**. For higher precision *n* (multiple of 4), scale linearly:
 
-* 8 bits → ×2
-* 12 bits → ×3
-* 16 bits → ×4
-  … i.e., `ceil(n / 4)` multiples.
+   - 8 bits → ×2
+   - 12 bits → ×3
+   - 16 bits → ×4
+     i.e., `ceil(n / 4)` multiples.
 
-**Run (part 2 — LUT evaluation):**
+2. **LUT evaluation**
 
-```bash
-cargo bench --bench bench_lut_eval
-```
+   ```bash
+   cargo bench --bench bench_lut_eval
+   ```
 
-The benchmark reports the time for **8→4** table lookup.
-For **n→n** LUTs (with 4-bit output chunking), scale linearly with the number of 4-bit chunks (e.g., 8→8 is roughly **2×** the 8→4 time).
+   The benchmark reports **8→4** table-lookup time. For **n→n** LUTs (with 4-bit chunking), scale by the number of output chunks (e.g., 8→8 ≈ 2× the 8→4 time).
 
-**Total n-to-n LUT time:**
+**Total n-to-n LUT time**
 Sum the scaled **GGSW extraction time** and the scaled **LUT evaluation time**.
 
 ---
 
-### [PBS-Tree–based Processor (tches25)](./related_work/tches25/README.md)
+### [PBS-Tree Method Processor](./related_work/tches25/README.md)
 
-Implementation of a general-purpose **8-bit (T)FHE processor** using PBS-tree–based LUTs (4→4 and 8→8).
-We use the instruction timings to infer LUT performance.
+Implementation of **“Designing a General-Purpose 8-bit (T)FHE Processor Abstraction”**
+([ePrint 2024/1201](https://eprint.iacr.org/2024/1201)), which uses 4→4 and 8→8 PBS-tree–based LUT instructions. We derive LUT timing from the reported instruction timings.
 
-**Build & run:**
+**Build & Run**
 
 ```bash
 git clone https://github.com/tfhe/tfhe.git
 cd tfhe
-git apply ../patch_fft.patch     
+git apply ../patch_fft.patch        # if applicable
 make -j8
 
 cd ..
@@ -211,9 +208,25 @@ make -j8
 ../bin/tches 42 5 12 203 127
 ```
 
-**Output:**
-The printed wall-clock times are used both for instruction-level comparisons and for deriving LUT timings.
+**Output**
+The printed times are used both for instruction-level comparison and for deriving LUT timings.
 
 ---
 
-### []
+### [CKKS Functional Bootstrapping (ckks)](./related_work/ckks/README.md)
+
+Implementation corresponding to **“General Functional Bootstrapping using CKKS”**  
+([ePrint 2024/1623](https://eprint.iacr.org/2024/1623)). This baseline enables *functional bootstrapping* in CKKS, allowing LUT-like evaluation. We follow the authors’ evaluation setup and report the relevant FB/LUT timings.
+
+**Build & Run**
+
+```bash
+mkdir build && cd build
+cmake ..
+make -j8
+./bin/examples/pke/ckks-functional-bootstrapping
+```
+
+The printed time is the time to finish a 8-bit LUT.
+
+---
