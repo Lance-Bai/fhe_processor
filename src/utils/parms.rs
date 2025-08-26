@@ -8,9 +8,7 @@ pub struct ProcessorParam<Scalar: UnsignedInteger> {
     lwe_modular_std_dev: StandardDev,
     polynomial_size: PolynomialSize,
     glwe_dimension: GlweDimension,
-    large_glwe_dimension: GlweDimension,
     glwe_modular_std_dev: StandardDev,
-    large_glwe_modular_std_dev: StandardDev,
     pbs_base_log: DecompositionBaseLog,
     pbs_level: DecompositionLevelCount,
     ks_base_log: DecompositionBaseLog,
@@ -34,9 +32,7 @@ impl<Scalar: UnsignedInteger> ProcessorParam<Scalar> {
         lwe_modular_std_dev: StandardDev,
         polynomial_size: PolynomialSize,
         glwe_dimension: GlweDimension,
-        large_glwe_dimension: GlweDimension,
         glwe_modular_std_dev: StandardDev,
-        large_glwe_modular_std_dev: StandardDev,
         pbs_base_log: DecompositionBaseLog,
         pbs_level: DecompositionLevelCount,
         ks_base_log: DecompositionBaseLog,
@@ -58,9 +54,7 @@ impl<Scalar: UnsignedInteger> ProcessorParam<Scalar> {
             lwe_modular_std_dev,
             polynomial_size,
             glwe_dimension,
-            large_glwe_dimension,
             glwe_modular_std_dev,
-            large_glwe_modular_std_dev,
             pbs_base_log,
             pbs_level,
             ks_base_log,
@@ -97,14 +91,6 @@ impl<Scalar: UnsignedInteger> ProcessorParam<Scalar> {
 
     pub fn glwe_modular_std_dev(&self) -> StandardDev {
         self.glwe_modular_std_dev
-    }
-
-    pub fn large_glwe_dimension(&self) -> GlweDimension {
-        self.large_glwe_dimension
-    }
-
-    pub fn large_glwe_modular_std_dev(&self) -> StandardDev {
-        self.large_glwe_modular_std_dev
     }
 
     pub fn pbs_base_log(&self) -> DecompositionBaseLog {

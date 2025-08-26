@@ -7,12 +7,10 @@ lazy_static! {
 
     pub static ref SetI: ProcessorParam<u64> = ProcessorParam::new(
         LweDimension(710), // lwe_dimension
-        StandardDev(2.09820e-5), // lwe_modular_std_dev
+        StandardDev(1.525878906e-5), // lwe_modular_std_dev
         PolynomialSize(1024), // polynomial_size
         GlweDimension(2), // glwe_dimension
-        GlweDimension(0), // large_glwe_dimension
-        StandardDev(2.94036e-16), // glwe_modular_std_dev
-        StandardDev(0.000000000000000000000000000000000000000000000000000000001), // large_glwe_modular_std_dev
+        StandardDev(4.440892099e-16), // glwe_modular_std_dev
         DecompositionBaseLog(12), // pbs_base_log
         DecompositionLevelCount(3), // pbs_level
         DecompositionBaseLog(4), // ks_base_log
@@ -32,12 +30,10 @@ lazy_static! {
 
         pub static ref SetI_large: ProcessorParam<u64> = ProcessorParam::new(
         LweDimension(710), // lwe_dimension
-        StandardDev(2.09820e-5), // lwe_modular_std_dev
+        StandardDev(1.525878906e-5), // lwe_modular_std_dev
         PolynomialSize(1024), // polynomial_size
         GlweDimension(2), // glwe_dimension
-        GlweDimension(0), // large_glwe_dimension
-        StandardDev(2.94036e-16), // glwe_modular_std_dev
-        StandardDev(0.000000000000000000000000000000000000000000000000000000001), // large_glwe_modular_std_dev
+        StandardDev(4.440892099e-16), // glwe_modular_std_dev
         DecompositionBaseLog(5), // pbs_base_log
         DecompositionLevelCount(9), // pbs_level
         DecompositionBaseLog(4), // ks_base_log
