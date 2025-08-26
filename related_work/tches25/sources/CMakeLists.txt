@@ -1,4 +1,4 @@
-set(TFHE_PREFIX /path/to/tfhe)
+set(TFHE_PREFIX ../tfhe)
 set(APP_NAME tches)
 set(SOME_NAME tches)
 set(MAIN1 ${CMAKE_CURRENT_LIST_DIR}/main.cpp)

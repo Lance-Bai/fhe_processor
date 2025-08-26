@@ -10,7 +10,7 @@ We implement:
     - [bench_aes.rs](benches/bench_aes.rs)
     - [bench_aes_half_cbs.rs](benches/bench_aes_half_cbs.rs)
   - Integer input LHE mode (Sec. 5.2) and LUT (Sec. 5.3)
-    - [bench_integer_input_lhs.rs](benches/bench_integer_input_lhe.rs)
+    - [bench_integer_input_lhe.rs](benches/bench_integer_input_lhe.rs)
     - [bench_lut_eval.rs](benches/bench_lut_eval.rs)
 - [error analysis](error_analysis) for the parameters used in the paper
 

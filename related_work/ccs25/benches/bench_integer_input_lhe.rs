@@ -8,11 +8,11 @@ use refined_tfhe_lhe::{allocate_and_generate_new_glwe_keyswitch_key, blind_rotat
 
 criterion_group!(
     name = benches;
-    config = Criterion::default().sample_size(1000);
+    config = Criterion::default().sample_size(100);
     targets =
-        criterion_benchmark_wopbs,
+        // criterion_benchmark_wopbs,
         criterion_benchmark_improved_wopbs,
-        criterion_benchmark_high_prec_improved_wopbs,
+        // criterion_benchmark_high_prec_improved_wopbs,
 );
 criterion_main!(benches);
 
@@ -233,7 +233,7 @@ fn criterion_benchmark_improved_wopbs(c: &mut Criterion) {
     let mut group = c.benchmark_group("wopbs");
 
     let param_list = [
-        (*INT_LHE_BASE_16, 1, "INT_LHE_BASE_16 extract 1-bit"),
+        // (*INT_LHE_BASE_16, 1, "INT_LHE_BASE_16 extract 1-bit"),
         (*INT_LHE_BASE_16, 2, "INT_LHE_BASE_16 extract 2-bit"),
     ];
 

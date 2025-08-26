@@ -49,7 +49,7 @@ This will run the processor test suite and display the results directly in the c
 
 ---
 
-## Benchmark Evaluation
+## [Benchmark Evaluation](./benches/)
 
 ### [LUT Time Evaluation](./benches/lut_bench.rs)
 
@@ -132,3 +132,88 @@ Run with:
 ```bash
 RAYON_NUM_THREADS=1 cargo bench --bench large_op_bench
 ```
+
+---
+
+## [Related Work](./related_work/)
+
+We include three public baselines under `./related_work/` to compare with our framework.
+Each baseline is evaluated using its own benchmarks; we follow their procedures and report the relevant timings. For each 
+
+### [PBS-based LUT (ccs24)](./related_work/ccs24/README_CCS.md)
+
+Implementation of **programmable bootstrapping (PBS)**–based LUT with high precision.
+We use the authors’ benchmark and take the reported timing as the LUT time.
+
+**Run:**
+
+```bash
+make bench_ccs_2024_fft_shrinking_ks
+```
+
+**Output:**
+The printed time corresponds to the execution time of a single LUT evaluation.
+
+---
+
+### [CMux-Tree–based LUT (ccs25)](./related_work/ccs25/README.md)
+
+Implementation of **Refined TFHE LHE**, representing a CMux-tree–based LUT evaluation.
+This artifact benchmarks the pipeline in two parts: (1) input encryption / GGSW extraction, and (2) LUT evaluation.
+We combine these parts to obtain the total n-to-n LUT time.
+
+**Run (part 1 — 4-bit GGSW extraction):**
+
+```bash
+cargo bench --bench bench_integer_input_lhe
+```
+
+Record the time for extracting GGSWs for **4 input bits**.
+For higher input precision **n** (multiple of 4), scale linearly:
+
+* 8 bits → ×2
+* 12 bits → ×3
+* 16 bits → ×4
+  … i.e., `ceil(n / 4)` multiples.
+
+**Run (part 2 — LUT evaluation):**
+
+```bash
+cargo bench --bench bench_lut_eval
+```
+
+The benchmark reports the time for **8→4** table lookup.
+For **n→n** LUTs (with 4-bit output chunking), scale linearly with the number of 4-bit chunks (e.g., 8→8 is roughly **2×** the 8→4 time).
+
+**Total n-to-n LUT time:**
+Sum the scaled **GGSW extraction time** and the scaled **LUT evaluation time**.
+
+---
+
+### [PBS-Tree–based Processor (tches25)](./related_work/tches25/README.md)
+
+Implementation of a general-purpose **8-bit (T)FHE processor** using PBS-tree–based LUTs (4→4 and 8→8).
+We use the instruction timings to infer LUT performance.
+
+**Build & run:**
+
+```bash
+git clone https://github.com/tfhe/tfhe.git
+cd tfhe
+git apply ../patch_fft.patch     
+make -j8
+
+cd ..
+cmake -S . -B ./build
+cd build
+make -j8
+
+../bin/tches 42 5 12 203 127
+```
+
+**Output:**
+The printed wall-clock times are used both for instruction-level comparisons and for deriving LUT timings.
+
+---
+
+### []
