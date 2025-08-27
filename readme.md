@@ -31,7 +31,7 @@ cd fhe_processor
 - **Cargo**: Bundled with Rust toolchain
 - **Operating System**:
   - Linux (Ubuntu 24.10 LTS, tested)
-- **Memory**: ≥ 24 GB recommended (tested)
+- **Memory**: 24 GB is avaliable for most cases (PC test in article), while some large-precision and related work requires up to 200 GB.
 - **Other tools**: `wget` or `curl` for artifact download
 
 ---
@@ -65,7 +65,7 @@ To test higher precision, modify the configuration at [these 3 lines](./benches/
 
 ```rust
 let ctx = setup_ctx(*SetI);
-let n_vals = [4, 8, 12, 16, 20, 24];
+let n_vals = [4, 8, 12, 16, 20, 24]; // add 28, 32 bits here
 let thread_vals = [1, 2, 4, 8];
 ```
 
