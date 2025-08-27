@@ -31,7 +31,7 @@ cd fhe_processor
 - **Cargo**: Bundled with Rust toolchain
 - **Operating System**:
   - Linux (Ubuntu 24.10 LTS, tested)
-- **Memory**: 24 GB is avaliable for most cases (PC test in article), while some large-precision and related work requires up to 200 GB.
+- **Memory**: 24 GB RAM by default, under which the majority of Tetris can be executed. Cases requiring more than 24 GB are explicitly noted with additional instructions in the benchmark section. For baseline implementations from related work, part of their memory requirements over this limit.
 - **Other tools**: `wget` or `curl` for artifact download
 
 ---
@@ -60,13 +60,13 @@ It measures the execution time of *n-to-n LUTs* using the same computation pipel
 - Supports precision from **4 to 32 bits**  
 - Supports **1–8 threads**  
 
-> **Note:** High-precision tests may require significant time and memory. By default, the maximum precision is set to 24 bits.  
-To test higher precision, modify the configuration at [these 3 lines](./benches/lut_bench.rs#L292-L294).
+> **Note:** High-precision tests may require significant time and memory. By default, the maximum precision is set to 24 bits because of the limitition of memory.
+To test higher precision, modify the configuration at [these 3 lines](./benches/lut_bench.rs#L292-L294) as follow and gurantee to have enough memory. The chosen of parameter set is also here.
 
 ```rust
-let ctx = setup_ctx(*SetI);
-let n_vals = [4, 8, 12, 16, 20, 24]; // add 28, 32 bits here
-let thread_vals = [1, 2, 4, 8];
+let ctx = setup_ctx(*SetI); //SetI and SetII can be chosen
+let n_vals = [4, 8, 12, 16, 20, 24, 28, 32]; // add 28, 32 bits here
+let thread_vals = [1, 2, 4, 8]; // set number of threads allowed maximum during evaluation
 ```
 
 Run with:
@@ -124,14 +124,15 @@ This benchmark corresponds to **Table 6: Performance of Optimized GTE** in the p
 It compares optimized and trivial implementations of comparison instructions.  
 
 - Only **GTE** is tested, since all comparisons share the same implementation.  
-- **GTE_ORI** is the trivial version; it is slow for 32-bit inputs and disabled by default.  
-  To enable, uncomment [this section](./benches/large_op_bench.rs#L34-L36).
+- **GTEO** is the trivial version.
 
 Run with:
 
 ```bash
 RAYON_NUM_THREADS=1 cargo bench --bench large_op_bench
 ```
+
+> **Note:** By default setting we comment cases of 16-bit both cipher GTEO and 32-bit cipher-plain GTEO for its require large memory. Uncomment [these lines](./benches/large_op_bench.rs#L32-L34) to enable these cases.
 
 ---
 
