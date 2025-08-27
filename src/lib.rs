@@ -24,7 +24,7 @@ mod manager_tests {
             average::AverageProgram, bubble::BubbleProgram, maximum::MaximumProgram,
             squaresum::SquaresumProgram,
         },
-        utils::instance::{SetI, SetI_large},
+        utils::instance::{SetI, SetII},
     };
     const SAMPLE_SIZE: usize = 10;
     #[test]
@@ -146,7 +146,7 @@ mod manager_tests {
     #[test]
     fn test_manager_large_compare_cc() {
         let size = 2_usize;
-        let mut manager = OperationManager::new(*SetI_large, size + 1, 16);
+        let mut manager = OperationManager::new(*SetII, size + 1, 16);
         manager.add_operation(ArithmeticOp::LT, OperandType::BothCipher, None);
         manager.set_execution_plan(vec![Step::new(0, vec![0, 1], size)]);
         let mut rng = rand::thread_rng();
@@ -185,7 +185,7 @@ mod manager_tests {
     fn test_manager_large_compare_pc() {
         let size = 1_usize;
         let b = 32718_usize;
-        let mut manager = OperationManager::new(*SetI_large, size + 1, 16);
+        let mut manager = OperationManager::new(*SetII, size + 1, 16);
         manager.add_operation(ArithmeticOp::GT, OperandType::CipherPlain, Some(b));
         manager.set_execution_plan(vec![Step::new(0, vec![0], size)]);
         let mut rng = rand::thread_rng();
@@ -221,7 +221,7 @@ mod manager_tests {
     fn test_manager_sign() {
         let size = 1_usize;
         let b = 1 << 31;
-        let mut manager = OperationManager::new(*SetI_large, size + 1, 32);
+        let mut manager = OperationManager::new(*SetII, size + 1, 32);
         manager.add_operation(ArithmeticOp::SIGN, OperandType::CipherPlain, Some(b));
         manager.set_execution_plan(vec![Step::new(0, vec![0], size)]);
         let mut rng = rand::thread_rng();

@@ -28,7 +28,7 @@ lazy_static! {
         4,
     );
 
-        pub static ref SetI_large: ProcessorParam<u64> = ProcessorParam::new(
+        pub static ref SetII: ProcessorParam<u64> = ProcessorParam::new(
         LweDimension(710), // lwe_dimension
         StandardDev(1.525878906e-5), // lwe_modular_std_dev
         PolynomialSize(1024), // polynomial_size

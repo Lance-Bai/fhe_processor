@@ -1,4 +1,4 @@
-# Artifact for *Tetris: A Versatile TFHE Look-Up-Table Framework and Its Application to FHE Instruction Set*
+# Artifact for *Tetris*
 
 ## Downloading the Artifact
 
@@ -19,8 +19,8 @@ wget -O fhe_processor.zip \
 Unzip and enter the workspace:
 
 ```bash
-unzip fhe_processor.zip
-cd artifact_of_fhe_processor
+unzip fhe_processor.zip -d fhe_processor
+cd fhe_processor
 ```
 
 ---
@@ -53,10 +53,10 @@ This will run the processor test suite and display the results directly in the c
 
 ### [LUT Time Evaluation](./benches/lut_bench.rs)
 
-This benchmark corresponds to **Table 2: LUT time results** in the paper.  
+This benchmark corresponds to **Table 3: FHE LUT Runtime Results** in the paper.  
 It measures the execution time of *n-to-n LUTs* using the same computation pipeline as the FHE processor.  
 
-- Provides two parameter sets: **SetI** and **SetI_large**  
+- Provides two parameter sets: **Set I** and **Set II**  
 - Supports precision from **4 to 32 bits**  
 - Supports **1–8 threads**  
 
@@ -76,13 +76,13 @@ cargo bench --bench lut_bench
 ```
 
 - The console output reports the total execution time for each precision–thread group.  
-- Detailed iteration results and separated timings for *circuit bootstrapping* and *table lookup* are stored in [log](./target/bench_logs), corresponding to **Table 3**.
+- Detailed iteration results and separated timings for *circuit bootstrapping* and *table lookup* are stored in [log](./target/bench_logs), corresponding to **Table 8: Tetris Performance for Differet Precission**.
 
 ---
 
 ### [Processor Operations Evaluation](./benches/all_op_bench.rs)
 
-This benchmark corresponds to **Table 5** in the paper.  
+This benchmark corresponds to **Table 9: Instructions Performance Evaluation** in the paper.  
 It evaluates all operations with 8-bit inputs under three modes:  
 
 - **cipher–cipher**  
@@ -100,7 +100,7 @@ RAYON_NUM_THREADS=1 cargo bench --bench all_op_bench
 
 ### [Typical Programs Evaluation](./benches/program_bench.rs)
 
-This benchmark corresponds to **Table 6** in the paper.  
+This benchmark corresponds to **Table 5: Programs Execution Time** in the paper.  
 It evaluates four representative programs on five unsigned 8-bit inputs:  
 
 - **Maximum**: Find the largest value  
@@ -120,7 +120,7 @@ Again, single-thread results are used in the paper for comparison.
 
 ### [Large-Precision Comparison Optimization](./benches/large_op_bench.rs)
 
-This benchmark corresponds to **Table 7** in the paper.  
+This benchmark corresponds to **Table 6: Performance of Optimized GTE** in the paper.  
 It compares optimized and trivial implementations of comparison instructions.  
 
 - Only **GTE** is tested, since all comparisons share the same implementation.  
@@ -228,5 +228,11 @@ make -j8
 ```
 
 The printed time is the time to finish a 8-bit LUT.
+
+---
+
+## [Security Analysis](./security_analysis.py)
+
+This bench estimate the security level of Tetris with some common attack. 
 
 ---

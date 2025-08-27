@@ -5,7 +5,7 @@ use fhe_processor::{
         operand::ArithmeticOp,
         operation::OperandType,
     },
-    utils::instance::SetI_large,
+    utils::instance::SetII,
 };
 use rand::Rng;
 use std::time::{Duration, Instant};
@@ -40,7 +40,7 @@ fn run_case(c: &mut Criterion, case: &BenchCase) {
         OperandType::CipherPlain => 1,
         _ => panic!("Only BothCipher and CipherPlain supported here"),
     };
-    let mut manager = OperationManager::new(*SetI_large, slots + 1, case.bit_len);
+    let mut manager = OperationManager::new(*SetII, slots + 1, case.bit_len);
 
     match case.mode {
         OperandType::BothCipher => {
