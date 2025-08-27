@@ -29,9 +29,8 @@ cd fhe_processor
 
 - **Rust**: Version 1.79 or later (tested with Rust 1.81 stable)
 - **Cargo**: Bundled with Rust toolchain
-- **Operating System**:
-  - Linux (Ubuntu 24.10 LTS, tested)
-- **Memory**: 24 GB RAM by default, under which the majority of Tetris can be executed. Cases requiring more than 24 GB are explicitly noted with additional instructions in the benchmark section. For baseline implementations from related work, part of their memory requirements over this limit.
+- **Operating System**: Linux (Ubuntu 24.10 LTS, tested)
+- **Memory**: 24 GB (PC) for most cases and 512 GB (server) for all cases; experiments requiring more than 24 GB are detailed in the benchmark section.
 - **Other tools**: `wget` or `curl` for artifact download
 
 ---
