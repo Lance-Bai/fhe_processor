@@ -290,8 +290,8 @@ fn make_iter_setup(ctx: &BenchCtx, n_bits: usize) -> IterSetup {
 
 fn bench_lut_sizes(c: &mut Criterion) {
     let ctx = setup_ctx(*SetI);
-    let n_vals = [4, 8, 12, 16, 20, 24,];
-    let thread_vals = [1, 2, 4, 8];
+    let n_vals = [4, 8, 12, 16, 20, 24];
+    let thread_vals = [1];
 
     // ---------------- CSV ----------------
     let target_dir = env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".into());
@@ -337,7 +337,6 @@ fn bench_lut_sizes(c: &mut Criterion) {
                 &n_bits,
                 |b, &nb| {
                     b.iter_custom(|iters| {
-
                         let pool = ThreadPoolBuilder::new()
                             .num_threads(threads)
                             .build()
@@ -400,14 +399,14 @@ fn bench_lut_sizes(c: &mut Criterion) {
 
 fn small_runs() -> Criterion {
     Criterion::default()
-        .sample_size(SAMPLE_SIZE) 
+        .sample_size(SAMPLE_SIZE)
         .warm_up_time(Duration::from_secs(1))
         .measurement_time(Duration::from_secs(20))
-        .configure_from_args() 
+        .configure_from_args()
 }
 criterion_group! {
     name = benches;
-    config = small_runs();  
+    config = small_runs();
     targets = bench_lut_sizes
 }
 criterion_main!(benches);

@@ -1,5 +1,5 @@
 use crate::operations::{
-    cipher_lut::generate_lut_from_vecs_auto,
+    cipher_lut::{blind_rotate_assign_local, cmux_tree_uniform_optimized, generate_lut_from_vecs_auto},
     operand::ArithmeticOp,
     plain_lut::{
         build_split_lut_tables, build_split_lut_tables_cipher_plain,
@@ -169,7 +169,6 @@ impl Operation {
             });
     }
 
-
     pub fn vertical_packing_multi_lookup(
         &self,
         lwe_outs: &mut [LweCiphertext<Vec<u64>>],
@@ -262,19 +261,35 @@ pub fn horizontal_vertical_packing_without_extract<Scalar: UnsignedTorus + CastI
         ciphertext_modulus,
     );
 
-    cmux_tree_memory_optimized(
+    // cmux_tree_memory_optimized(
+    //     cmux_tree_lut_res.as_mut_view(),
+    //     lut,
+    //     cmux_ggsw,
+    //     fft,
+    //     stack.rb_mut(),
+    // );
+    // blind_rotate_assign(
+    //     cmux_tree_lut_res.as_mut_view(),
+    //     br_ggsw,
+    //     fft,
+    //     stack.rb_mut(),
+    // );
+
+    cmux_tree_uniform_optimized(
         cmux_tree_lut_res.as_mut_view(),
         lut,
         cmux_ggsw,
         fft,
         stack.rb_mut(),
     );
-    blind_rotate_assign(
+    blind_rotate_assign_local(
         cmux_tree_lut_res.as_mut_view(),
         br_ggsw,
         fft,
         stack.rb_mut(),
+        cmux_ggsw.count() == 0,
     );
+    
 
     // sample extract of the RLWE of the Vertical packing
 
