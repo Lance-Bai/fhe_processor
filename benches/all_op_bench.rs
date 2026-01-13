@@ -103,11 +103,11 @@ fn benches_all_ops(c: &mut Criterion) {
     use ArithmeticOp::*;
     let ops: &[ArithmeticOp] = &[
         Add, Sub, Mul, Mulh, Div, Mod, EQ, GT, LT, GTE, LTE, MAX, MIN, RL, RR, SL, SR, OR, AND,
-        XOR,
+        XOR, NAND,
     ];
 
     let ops_u: &[ArithmeticOp] = &[
-        NAND, MOVE
+        MOVE
     ];
 
     let modes: &[(&'static str, OperandType)] = &[
