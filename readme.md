@@ -213,23 +213,20 @@ The printed times are used both for instruction-level comparison and for derivin
 
 ---
 
-### [CKKS Functional Bootstrapping (ckks)](./related_work/ckks/README.md)
+### [CKKS Functional Bootstrapping]
 
 Implementation corresponding to **“General Functional Bootstrapping using CKKS”**  
 ([ePrint 2024/1623](https://eprint.iacr.org/2024/1623)). This baseline enables *functional bootstrapping* in CKKS, allowing LUT-like evaluation. We follow the authors’ evaluation setup and report the relevant FB/LUT timings.
 
 **Build & Run**
 
-```bash
-mkdir build && cd build
-cmake ..
-make -j8
-./bin/examples/pke/ckks-functional-bootstrapping
-```
-
-The printed time is the time to finish a 8-bit LUT.
+Following the building instructions of OpenFHE, the related test bench is at [UnitTestFBT](https://github.com/openfheorg/openfhe-development/blob/v1.4.0/src/pke/unittest/utckksrns/UnitTestFBT.cpp). We use the parameter sets which **desc** is 110, 113, 119, 122 respectively.
 
 ---
+
+### [CKKS large LUT Evaluation]
+
+Following the artifact of **"Evaluating Larger Lookup Tables using CKKS"**([ePrint 2025/1301](https://eprint.iacr.org/2025/1301)), this will be public avaliable in OpenFHE v1.5.0 in the future.
 
 ## [Security Analysis](./security_analysis.py)
 

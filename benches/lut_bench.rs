@@ -291,8 +291,8 @@ fn make_iter_setup(ctx: &BenchCtx, n_bits: usize) -> IterSetup {
 
 fn bench_lut_sizes(c: &mut Criterion) {
     let ctx = setup_ctx(*SetI);
-    let n_vals = [4];
-    let thread_vals = [1];
+    let n_vals = [4, 8, 12, 16, 20, 24, 28];
+    let thread_vals = [1, 2, 4, 8];
 
     // ---------------- CSV ----------------
     let target_dir = env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".into());
