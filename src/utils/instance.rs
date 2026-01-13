@@ -28,7 +28,7 @@ lazy_static! {
         4,
     );
 
-        pub static ref SetII: ProcessorParam<u64> = ProcessorParam::new(
+    pub static ref SetII: ProcessorParam<u64> = ProcessorParam::new(
         LweDimension(710), // lwe_dimension
         StandardDev(1.525878906e-5), // lwe_modular_std_dev
         PolynomialSize(1024), // polynomial_size
@@ -46,6 +46,29 @@ lazy_static! {
         DecompositionBaseLog(16), // cbs_base_log
         DecompositionLevelCount(1), // cbs_level
         LutCountLog(0), // log_lut_count
+        CiphertextModulus::<u64>::new_native(), // ciphertext_modulus
+        4, // message_size
+        4,
+    );
+
+    pub static ref SetIII: ProcessorParam<u64> = ProcessorParam::new(
+        LweDimension(710), // lwe_dimension
+        StandardDev(1.525878906e-5), // lwe_modular_std_dev
+        PolynomialSize(2048), // polynomial_size
+        GlweDimension(1), // glwe_dimension
+        StandardDev(4.440892099e-16), // glwe_modular_std_dev
+        DecompositionBaseLog(15), // pbs_base_log
+        DecompositionLevelCount(2), // pbs_level
+        DecompositionBaseLog(6), // ks_base_log
+        DecompositionLevelCount(3), // ks_level
+        DecompositionBaseLog(4), // auto_base_log
+        DecompositionLevelCount(10), // auto_level
+        FftType::Split(38), // fft_type_auto
+        DecompositionBaseLog(13), // ss_base_log
+        DecompositionLevelCount(3), // ss_level
+        DecompositionBaseLog(4), // cbs_base_log
+        DecompositionLevelCount(4), // cbs_level
+        LutCountLog(2), // log_lut_count
         CiphertextModulus::<u64>::new_native(), // ciphertext_modulus
         4, // message_size
         4,

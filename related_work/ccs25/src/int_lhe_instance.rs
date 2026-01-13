@@ -169,6 +169,28 @@ lazy_static! {
         4,
     );
 
+    pub static ref INT_LHE_BASE_16_new: IntLheParam<u64> = IntLheParam::new(
+        LweDimension(1024), // lwe_dimension
+        STD_DEV_1024, // lwe_modular_std_dev
+        PolynomialSize(4096), // polynomial_size
+        GlweDimension(1), // glwe_dimension
+        STD_DEV_4096, // glwe_modular_std_dev
+        DecompositionBaseLog(15), // pbs_base_log
+        DecompositionLevelCount(2), // pbs_level
+        DecompositionBaseLog(6), // ks_base_log
+        DecompositionLevelCount(3), // ks_level
+        DecompositionBaseLog(15), // auto_base_log
+        DecompositionLevelCount(3), // auto_level
+        FftType::Split(43), // fft_type_auto
+        DecompositionBaseLog(17), // ss_base_log
+        DecompositionLevelCount(2), // ss_level
+        DecompositionBaseLog(4), // cbs_base_log
+        DecompositionLevelCount(4), // cbs_level
+        LutCountLog(2), // log_lut_count
+        CiphertextModulus::<u64>::new_native(), // ciphertext_modulus
+        4,
+    );
+
     pub static ref INT_LHE_BASE_64: HighPrecIntLheParam<u64> = HighPrecIntLheParam::new(
         LweDimension(873), // lwe_dimension
         STD_DEV_873, // lwe_modular_std_dev

@@ -235,6 +235,7 @@ fn criterion_benchmark_improved_wopbs(c: &mut Criterion) {
     let param_list = [
         // (*INT_LHE_BASE_16, 1, "INT_LHE_BASE_16 extract 1-bit"),
         (*INT_LHE_BASE_16, 2, "INT_LHE_BASE_16 extract 2-bit"),
+        (*INT_LHE_BASE_16_new, 2, "INT_LHE_BASE_16_new extract 2-bit"),
     ];
 
     for (param, extract_size, id) in param_list.iter() {

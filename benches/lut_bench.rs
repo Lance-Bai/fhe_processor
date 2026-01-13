@@ -17,6 +17,7 @@ use fhe_processor::processors::key_gen::allocate_and_generate_new_reused_lwe_key
 use fhe_processor::processors::lwe_stored_ksk::{
     allocate_and_generate_new_stored_reused_lwe_keyswitch_key, LweStoredReusedKeyswitchKey,
 };
+use fhe_processor::utils::instance::SetIII;
 use fhe_processor::{utils::instance::SetI, utils::parms::ProcessorParam};
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::iter::{
@@ -290,7 +291,7 @@ fn make_iter_setup(ctx: &BenchCtx, n_bits: usize) -> IterSetup {
 
 fn bench_lut_sizes(c: &mut Criterion) {
     let ctx = setup_ctx(*SetI);
-    let n_vals = [4, 8, 12, 16, 20, 24];
+    let n_vals = [4];
     let thread_vals = [1];
 
     // ---------------- CSV ----------------
@@ -401,7 +402,7 @@ fn small_runs() -> Criterion {
     Criterion::default()
         .sample_size(SAMPLE_SIZE)
         .warm_up_time(Duration::from_secs(1))
-        .measurement_time(Duration::from_secs(20))
+        .measurement_time(Duration::from_secs(10))
         .configure_from_args()
 }
 criterion_group! {
