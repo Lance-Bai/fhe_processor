@@ -25,10 +25,10 @@ mod manager_tests {
                 allocate_and_trivially_encrypt_new_glwe_ciphertext,
                 cmux_assign_mem_optimized_requirement, convert_standard_ggsw_ciphertext_to_fourier,
                 convert_standard_lwe_bootstrap_key_to_fourier, decrypt_glwe_ciphertext,
-                encrypt_glwe_ciphertext, ActivatedRandomGenerator, CastInto, ComputationBuffers,
-                ContiguousEntityContainer, EncryptionRandomGenerator, Fft, FourierGgswCiphertext,
-                FourierLweBootstrapKey, GgswCiphertext, GlweCiphertext, Plaintext, PlaintextList,
-                SecretRandomGenerator,
+                decrypt_lwe_ciphertext, encrypt_glwe_ciphertext, ActivatedRandomGenerator,
+                CastInto, ComputationBuffers, ContiguousEntityContainer, EncryptionRandomGenerator,
+                Fft, FourierGgswCiphertext, FourierLweBootstrapKey, GgswCiphertext, GlweCiphertext,
+                Plaintext, PlaintextList, SecretRandomGenerator,
             },
             seeders::new_seeder,
         },
@@ -42,6 +42,7 @@ mod manager_tests {
             operand::ArithmeticOp,
             operation::OperandType,
         },
+        opmized_operations::trivium::{self, TriviumState},
         processors::{
             cbs_4_bits::circuit_bootstrapping_rev_tr_lead_one,
             key_gen::allocate_and_generate_new_reused_lwe_key,
@@ -53,7 +54,7 @@ mod manager_tests {
         },
         utils::{
             instance::{SetI, SetII, SetTest},
-            parms,
+            parms, plain_trivium::PlainTrivium,
         },
     };
     const SAMPLE_SIZE: usize = 10;
@@ -148,89 +149,122 @@ mod manager_tests {
 
         let ss_key = ss_key_owned.as_view();
         let fourier_bsk = fourier_bsk.as_view();
+        {
+            //     let mut input = allocate_and_encrypt_new_lwe_ciphertext(
+            //         &glwe_lwe_sk,
+            //         Plaintext(1_u64 << (63)),
+            //         glwe_modular_std_dev,
+            //         ciphertext_modulus,
+            //         &mut encryption_generator,
+            //     );
+            //     let plain_list = PlaintextList::new(1 << 63, PlaintextCount(polynomial_size.0));
+            //     let mut zero_list = PlaintextList::new(0, PlaintextCount(polynomial_size.0));
+            //     let mut glwe = GlweCiphertext::new(0, glwe_size, polynomial_size, ciphertext_modulus);
+            //     encrypt_glwe_ciphertext(
+            //         &glwe_sk,
+            //         &mut glwe,
+            //         &plain_list,
+            //         glwe_modular_std_dev,
+            //         &mut encryption_generator,
+            //     );
 
-        let mut input = allocate_and_encrypt_new_lwe_ciphertext(
-            &glwe_lwe_sk,
-            Plaintext(1_u64 << (63)),
-            glwe_modular_std_dev,
-            ciphertext_modulus,
-            &mut encryption_generator,
-        );
-        let plain_list = PlaintextList::new(1 << 63, PlaintextCount(polynomial_size.0));
-        let mut zero_list = PlaintextList::new(0, PlaintextCount(polynomial_size.0));
-        let mut glwe = GlweCiphertext::new(0, glwe_size, polynomial_size, ciphertext_modulus);
-        encrypt_glwe_ciphertext(
-            &glwe_sk,
-            &mut glwe,
-            &plain_list,
-            glwe_modular_std_dev,
-            &mut encryption_generator,
-        );
+            //     let mut out = allocate_and_trivially_encrypt_new_glwe_ciphertext(
+            //         glwe_size,
+            //         &zero_list,
+            //         ciphertext_modulus,
+            //     );
 
-        let mut out = allocate_and_trivially_encrypt_new_glwe_ciphertext(
-            glwe_size,
-            &zero_list,
-            ciphertext_modulus,
-        );
+            //     let glwe_view = glwe.as_view();
 
-        let glwe_view = glwe.as_view();
+            //     let mut ggsw = GgswCiphertext::new(
+            //         0_u64,
+            //         glwe_size,
+            //         polynomial_size,
+            //         cbs_base_log,
+            //         cbs_level,
+            //         ciphertext_modulus,
+            //     );
 
-        let mut ggsw = GgswCiphertext::new(
-            0_u64,
+            //     let mut fourier_ggsw =
+            //         FourierGgswCiphertext::new(glwe_size, polynomial_size, cbs_base_log, cbs_level);
+            //     circuit_bootstrapping_rev_tr_lead_one(
+            //         &input,
+            //         &mut ggsw,
+            //         fourier_bsk,
+            //         &auto_keys,
+            //         ss_key,
+            //         &ksk,
+            //         param,
+            //     );
+
+            //     // let glist = ggsw.as_glwe_list();
+            //     // for glwe_temp in glist.iter() {
+            //     //     let mut zero_list = PlaintextList::new(0, PlaintextCount(polynomial_size.0));
+            //     //     decrypt_glwe_ciphertext(&glwe_sk, &glwe_temp, &mut zero_list);
+            //     //     let binding = zero_list.as_view();
+            //     //     let result = binding.get(0).0;
+            //     //     println!("ggsw result = {:064b}", result);
+            //     // }
+
+            //     convert_standard_ggsw_ciphertext_to_fourier(&ggsw, &mut fourier_ggsw);
+            //     let fourier_ggsw = fourier_ggsw.as_view();
+
+            //     let fft = Fft::new(polynomial_size);
+            //     let fft_viwe = fft.as_view();
+            //     let mut buffer = ComputationBuffers::new();
+            //     let buffer_size_req =
+            //         cmux_assign_mem_optimized_requirement::<u64>(glwe_size, polynomial_size, fft_viwe)
+            //             .unwrap()
+            //             .unaligned_bytes_required();
+
+            //     buffer.resize(buffer_size_req);
+            //     let stuck = buffer.stack();
+
+            //     add_external_product_assign_lead_one(
+            //         out.as_mut_view(),
+            //         fourier_ggsw,
+            //         glwe_view,
+            //         fft_viwe,
+            //         stuck,
+            //     );
+
+            //     decrypt_glwe_ciphertext(&glwe_sk, &out, &mut zero_list);
+            //     let binding = zero_list.as_view();
+            //     let result = binding.get(0).0;
+            //     println!("result = {:064b}", result);
+            //     println!("decoded = {}", (((result >> 62) + 1) >> 1) & 1);
+        }
+
+        let mut rng = rand::thread_rng();
+        let key = (0..80)
+            .map(|_| u64::from(rng.gen_bool(0.5)))
+            .collect::<Vec<u64>>();
+        let iv = (0..80)
+            .map(|_| u64::from(rng.gen_bool(0.5)))
+            .collect::<Vec<u64>>();
+        println!("key = {}",key.iter().map(|b| if *b == 0 { '0' } else { '1' }).collect::<String>());
+        println!("iv  = {}",iv.iter().map(|b| if *b == 0 { '0' } else { '1' }).collect::<String>());
+        println!("start trivium");
+        let mut plain_trivium = PlainTrivium::new(key.clone(), iv.clone());
+        let mut trivium = TriviumState::new(
             glwe_size,
             polynomial_size,
             cbs_base_log,
             cbs_level,
             ciphertext_modulus,
         );
-
-        let mut fourier_ggsw =
-            FourierGgswCiphertext::new(glwe_size, polynomial_size, cbs_base_log, cbs_level);
-        circuit_bootstrapping_rev_tr_lead_one(
-            &input,
-            &mut ggsw,
-            fourier_bsk,
-            &auto_keys,
-            ss_key,
-            &ksk,
-            param,
-        );
-
-        // let glist = ggsw.as_glwe_list();
-        // for glwe_temp in glist.iter() {
-        //     let mut zero_list = PlaintextList::new(0, PlaintextCount(polynomial_size.0));
-        //     decrypt_glwe_ciphertext(&glwe_sk, &glwe_temp, &mut zero_list);
-        //     let binding = zero_list.as_view();
-        //     let result = binding.get(0).0;
-        //     println!("ggsw result = {:064b}", result);
-        // }
-
-        convert_standard_ggsw_ciphertext_to_fourier(&ggsw, &mut fourier_ggsw);
-        let fourier_ggsw = fourier_ggsw.as_view();
-
-        let fft = Fft::new(polynomial_size);
-        let fft_viwe = fft.as_view();
-        let mut buffer = ComputationBuffers::new();
-        let buffer_size_req =
-            cmux_assign_mem_optimized_requirement::<u64>(glwe_size, polynomial_size, fft_viwe)
-                .unwrap()
-                .unaligned_bytes_required();
-
-        buffer.resize(buffer_size_req);
-        let stuck = buffer.stack();
-
-        add_external_product_assign_lead_one(
-            out.as_mut_view(),
-            fourier_ggsw,
-            glwe_view,
-            fft_viwe,
-            stuck,
-        );
-
-        decrypt_glwe_ciphertext(&glwe_sk, &out, &mut zero_list);
-        let binding = zero_list.as_view();
-        let result = binding.get(0).0;
-        println!("result = {:064b}", result);
-        println!("decoded = {}", (((result >> 62) + 1) >> 1) & 1);
+        trivium.init_state(&key, &iv, fourier_bsk, &auto_keys, ss_key, &ksk, param);
+        println!("finish init_state");
+        let num_steps = 64;
+        let result = trivium.run(num_steps, fourier_bsk, &auto_keys, ss_key, &ksk, param);
+        println!("finish run");
+        print!("result   = ");
+        for e in result.iter() {
+            let a = decrypt_lwe_ciphertext(&glwe_lwe_sk, e);
+            print!("{}", (((a.0 >> 62) + 1) >> 1) & 1);
+        }
+        println!();
+        let mut expected = plain_trivium.gen_u64();
+        println!("expected = {:064b}", expected);
     }
 }

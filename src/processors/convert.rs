@@ -47,7 +47,7 @@ pub fn convert_to_ggsw_after_blind_rotate_rev_tr_lead_one<Scalar, InputCont, Out
     for (k, (mut glwe_out, glwe_in)) in glev_out.iter_mut().zip(glev_in.iter()).enumerate() {
         let log_scale = Scalar::BITS - k * cbs_base_log.0 - 1;
         let scale_offset = Plaintext(Scalar::ONE << (log_scale - 1));
-        println!("log_scale = {}, scale_offset = {:064b}", log_scale, scale_offset.0);
+        // println!("log_scale = {}, scale_offset = {:064b}", log_scale, scale_offset.0);
 
         extract_and_adjust_lwe(&mut buf_lwe, &glwe_in, &scale_offset);
 

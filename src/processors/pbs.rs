@@ -33,7 +33,7 @@ pub fn pbs_many_lut_after_ms_before_extract_lead_one<Scalar, OutputCont>(
 
     let half_box_size = polynomial_size.0 / (2 << num_extract_bits);
     let lut_count = 1 << log_lut_count.0;
-    println!("cbs_level = {}, lut_count = {}, half_box_size = {}", cbs_level.0, lut_count, half_box_size);
+    // println!("cbs_level = {}, lut_count = {}, half_box_size = {}", cbs_level.0, lut_count, half_box_size);
 
     for (acc_idx, mut glev_chunk) in glev_out.chunks_mut(lut_count).enumerate() {
         // let mut accumulator = (0..polynomial_size.0)
