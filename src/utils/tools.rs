@@ -1,7 +1,6 @@
 use tfhe::core_crypto::prelude::{Container, ContainerMut, MonomialDegree, Polynomial, UnsignedInteger};
 
 
-
 pub fn polynomial_wrapping_monic_monomial_mul_and_subtract<Scalar, OutputCont, InputCont>(
     output: &mut Polynomial<OutputCont>,
     input: &Polynomial<InputCont>,

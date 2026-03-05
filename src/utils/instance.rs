@@ -5,6 +5,28 @@ use tfhe::core_crypto::prelude::*;
 
 lazy_static! {
 
+        pub static ref SetTest: ProcessorParam<u64> = ProcessorParam::new(
+        LweDimension(710), // lwe_dimension
+        StandardDev(1.525878906e-5), // lwe_modular_std_dev
+        PolynomialSize(1024), // polynomial_size
+        GlweDimension(2), // glwe_dimension
+        StandardDev(4.440892099e-16), // glwe_modular_std_dev
+        DecompositionBaseLog(12), // pbs_base_log
+        DecompositionLevelCount(3), // pbs_level
+        DecompositionBaseLog(4), // ks_base_log
+        DecompositionLevelCount(4), // ks_level
+        DecompositionBaseLog(10), // auto_base_log
+        DecompositionLevelCount(4), // auto_level
+        FftType::Split(38), // fft_type_auto
+        DecompositionBaseLog(13), // ss_base_log
+        DecompositionLevelCount(3), // ss_level
+        DecompositionBaseLog(8), // cbs_base_log
+        DecompositionLevelCount(3), // cbs_level
+        LutCountLog(2), // log_lut_count
+        CiphertextModulus::<u64>::new_native(), // ciphertext_modulus
+        1, // message_size
+        1,
+    );
     pub static ref SetI: ProcessorParam<u64> = ProcessorParam::new(
         LweDimension(710), // lwe_dimension
         StandardDev(1.525878906e-5), // lwe_modular_std_dev

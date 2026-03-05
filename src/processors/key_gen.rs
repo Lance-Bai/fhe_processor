@@ -1,9 +1,9 @@
 use tfhe::{
     boolean::prelude::LweDimension,
-    core_crypto::
+    core_crypto::{commons::math::decomposition::DecompositionLevel, 
         prelude::{
-            Container, LweSecretKey, LweSecretKeyOwned, UnsignedTorus,
-        }
+            ByteRandomGenerator, Container, ContainerMut, ContiguousEntityContainerMut, EncryptionRandomGenerator, GgswCiphertext, GlweSecretKey, LweSecretKey, LweSecretKeyOwned, Plaintext, UnsignedTorus
+        }}, shortint::parameters::DispersionParameter
     ,
 };
 

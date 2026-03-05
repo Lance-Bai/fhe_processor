@@ -10,253 +10,227 @@ pub mod utils;
 mod manager_tests {
     use std::time::Instant;
 
+    use jemalloc_ctl::opt::zero;
     use num_traits::ToPrimitive;
     use rand::Rng;
-    use tfhe::core_crypto::prelude::CastInto;
+    use refined_tfhe_lhe::{gen_all_auto_keys, generate_scheme_switching_key};
+    use tfhe::{
+        boolean::prelude::DecompositionLevelCount,
+        core_crypto::{
+            fft_impl::fft128::crypto::ggsw::add_external_product_assign,
+            prelude::{
+                allocate_and_encrypt_new_lwe_ciphertext,
+                allocate_and_generate_new_binary_glwe_secret_key,
+                allocate_and_generate_new_lwe_bootstrap_key,
+                allocate_and_trivially_encrypt_new_glwe_ciphertext,
+                cmux_assign_mem_optimized_requirement, convert_standard_ggsw_ciphertext_to_fourier,
+                convert_standard_lwe_bootstrap_key_to_fourier, decrypt_glwe_ciphertext,
+                encrypt_glwe_ciphertext, ActivatedRandomGenerator, CastInto, ComputationBuffers,
+                ContiguousEntityContainer, EncryptionRandomGenerator, Fft, FourierGgswCiphertext,
+                FourierLweBootstrapKey, GgswCiphertext, GlweCiphertext, Plaintext, PlaintextList,
+                SecretRandomGenerator,
+            },
+            seeders::new_seeder,
+        },
+        shortint::wopbs::PlaintextCount,
+    };
 
     use crate::{
         operations::{
+            cipher_lut::add_external_product_assign_lead_one,
             manager::{OperationManager, Step},
             operand::ArithmeticOp,
             operation::OperandType,
+        },
+        processors::{
+            cbs_4_bits::circuit_bootstrapping_rev_tr_lead_one,
+            key_gen::allocate_and_generate_new_reused_lwe_key,
+            lwe_stored_ksk::allocate_and_generate_new_stored_reused_lwe_keyswitch_key,
         },
         programs::{
             average::AverageProgram, bubble::BubbleProgram, maximum::MaximumProgram,
             squaresum::SquaresumProgram,
         },
-        utils::instance::{SetI, SetII},
+        utils::{
+            instance::{SetI, SetII, SetTest},
+            parms,
+        },
     };
     const SAMPLE_SIZE: usize = 10;
-    #[test]
-    fn test_manager_maximum() {
-        let size = 5_usize;
-        let mut manager = OperationManager::new(*SetI, size + 1, 8);
-        manager.add_operatoins(MaximumProgram::load_operatonis());
-        manager.set_execution_plan(MaximumProgram::load_programs(size));
-
-        manager.load_data(16, 0);
-        manager.load_data(4, 1);
-        manager.load_data(0, 2);
-        manager.load_data(9, 3);
-        manager.load_data(5, 4);
-        let t = Instant::now();
-        for _ in 0..SAMPLE_SIZE {
-            manager.execute();
-        }
-
-        println!(
-            "Execution time: {:.3?}",
-            t.elapsed() / SAMPLE_SIZE.cast_into()
-        );
-        let result = manager.get_data(size);
-        println!("Maximum of [16, 4, 0, 9, 5] is {}", result);
-    }
 
     #[test]
-    fn test_manager_bubble() {
-        let size = 5_usize;
-        let mut manager = OperationManager::new(*SetI, size + 1, 8);
-        manager.add_operatoins(BubbleProgram::load_operatonis());
-        manager.set_execution_plan(BubbleProgram::load_programs(size));
+    fn test_lead_one_cbs() {
+        let param = &SetTest;
+        let lwe_dimension = param.lwe_dimension();
+        let lwe_modular_std_dev = param.lwe_modular_std_dev();
+        let polynomial_size = param.polynomial_size();
+        let glwe_dimension = param.glwe_dimension();
+        let glwe_modular_std_dev = param.glwe_modular_std_dev();
+        let pbs_base_log = param.pbs_base_log();
+        let pbs_level = param.pbs_level();
+        let ks_base_log = param.ks_base_log();
+        let ks_level = param.ks_level();
+        let auto_base_log = param.auto_base_log();
+        let auto_level = param.auto_level();
+        let auto_fft_type = param.fft_type_auto();
+        let ss_base_log = param.ss_base_log();
+        let ss_level = param.ss_level();
+        let cbs_base_log = param.cbs_base_log();
+        let cbs_level = param.cbs_level();
+        let ciphertext_modulus = param.ciphertext_modulus();
+        let message_size = param.message_size();
+        let extract_size = param.extract_size();
+        let glwe_size = glwe_dimension.to_glwe_size();
 
-        manager.load_data(16, 0);
-        manager.load_data(4, 1);
-        manager.load_data(0, 2);
-        manager.load_data(9, 3);
-        manager.load_data(5, 4);
-        let t = Instant::now();
-        for _ in 0..SAMPLE_SIZE {
-            manager.execute();
-        }
+        let mut boxed_seeder = new_seeder();
+        let seeder = boxed_seeder.as_mut();
 
-        println!(
-            "Execution time: {:.3?}",
-            t.elapsed() / SAMPLE_SIZE.cast_into()
+        let mut secret_generator =
+            SecretRandomGenerator::<ActivatedRandomGenerator>::new(seeder.seed());
+        let mut encryption_generator =
+            EncryptionRandomGenerator::<ActivatedRandomGenerator>::new(seeder.seed(), seeder);
+
+        // Generate keys
+        let glwe_sk = allocate_and_generate_new_binary_glwe_secret_key(
+            glwe_dimension,
+            polynomial_size,
+            &mut secret_generator,
         );
-        print!("[16, 4, 0, 9, 5] after sorting is: [");
-        for i in 0..size {
-            let result = manager.get_data(i);
-            print!("{} ", result);
-        }
-        println!("]")
-    }
-
-    #[test]
-    fn test_manager_squaresum() {
-        let size = 5_usize;
-        let mut manager = OperationManager::new(*SetI, size + 2, 8);
-        manager.add_operatoins(SquaresumProgram::load_operatonis());
-        manager.set_execution_plan(SquaresumProgram::load_programs(size));
-
-        manager.load_data(2, 0);
-        manager.load_data(4, 1);
-        manager.load_data(0, 2);
-        manager.load_data(9, 3);
-        manager.load_data(5, 4);
-
-        let t = Instant::now();
-        for _ in 0..SAMPLE_SIZE {
-            manager.load_data(0, size + 1); // buf[size] = 0
-            manager.execute();
-        }
-
-        println!(
-            "Execution time: {:.3?}",
-            t.elapsed() / SAMPLE_SIZE.cast_into()
+        let glwe_lwe_sk = glwe_sk.as_lwe_secret_key();
+        let lwe_sk_after_ks = allocate_and_generate_new_reused_lwe_key(&glwe_lwe_sk, lwe_dimension);
+        let ksk = allocate_and_generate_new_stored_reused_lwe_keyswitch_key(
+            &glwe_lwe_sk,
+            &lwe_sk_after_ks,
+            ks_base_log,
+            ks_level,
+            glwe_modular_std_dev,
+            ciphertext_modulus,
+            &mut encryption_generator,
         );
-        let result = manager.get_data(size + 1);
-        println!(
-            "Square sum of [2,4,0,9,5] is {}, which should be {}",
-            result,
-            (2 * 2 + 4 * 4 + 0_usize + 9 * 9 + 5 * 5)
+
+        let bsk = allocate_and_generate_new_lwe_bootstrap_key(
+            &lwe_sk_after_ks,
+            &glwe_sk,
+            pbs_base_log,
+            pbs_level,
+            glwe_modular_std_dev,
+            ciphertext_modulus,
+            &mut encryption_generator,
         );
-    }
 
-    #[test]
-    fn test_manager_average() {
-        let size = 5_usize;
-        let mut manager = OperationManager::new(*SetI, size + 1, 8);
-        manager.add_operatoins(AverageProgram::load_operatonis(size));
-        manager.set_execution_plan(AverageProgram::load_programs(size));
-
-        manager.load_data(2, 0);
-        manager.load_data(4, 1);
-        manager.load_data(0, 2);
-        manager.load_data(9, 3);
-        manager.load_data(5, 4);
-
-        let t = Instant::now();
-        for _ in 0..SAMPLE_SIZE {
-            manager.load_data(0, size);
-            manager.execute();
-        }
-
-        println!(
-            "Execution time: {:.3?}",
-            t.elapsed() / SAMPLE_SIZE.cast_into()
+        let mut fourier_bsk = FourierLweBootstrapKey::new(
+            bsk.input_lwe_dimension(),
+            bsk.glwe_size(),
+            bsk.polynomial_size(),
+            bsk.decomposition_base_log(),
+            bsk.decomposition_level_count(),
         );
-        let result = manager.get_data(size);
-        println!(
-            "Average of [2,4,0,9,5] is {}, which should be {}",
-            result,
-            (2 + 4 + 0 + 9 + 5) / 5_usize
-        );
-    }
+        convert_standard_lwe_bootstrap_key_to_fourier(&bsk, &mut fourier_bsk);
+        drop(bsk);
 
-    #[test]
-    fn test_manager_large_compare_cc() {
-        let size = 2_usize;
-        let mut manager = OperationManager::new(*SetII, size + 1, 16);
-        manager.add_operation(ArithmeticOp::LT, OperandType::BothCipher, None);
-        manager.set_execution_plan(vec![Step::new(0, vec![0, 1], size)]);
-        let mut rng = rand::thread_rng();
-        let mut count = 0;
-        let t = Instant::now();
-        for _ in 0..SAMPLE_SIZE {
-            let a: u32 = rng.gen();
-            let b: u32 = rng.gen();
-            let a = a % 65536;
-            let b = b % 65536;
-            let true_result: usize = if a < b { 1 } else { 0 };
-            manager.load_data(a.cast_into(), 0);
-            manager.load_data(b.cast_into(), 1);
-            manager.execute();
-            let result = manager.get_data(size);
-            println!(
-                " 16-bit-CC-LT({}, {}) = {}, which should be {}",
-                a, b, result, true_result
-            );
-
-            if result == true_result {
-                count = count + 1;
-            }
-        }
-        println!(
-            "accuracy: {:.3?}",
-            count.to_f64().unwrap() / SAMPLE_SIZE.to_f64().unwrap()
+        let auto_keys = gen_all_auto_keys(
+            auto_base_log,
+            auto_level,
+            auto_fft_type,
+            &glwe_sk,
+            glwe_modular_std_dev,
+            &mut encryption_generator,
         );
-        println!(
-            "Execution time: {:.3?}",
-            t.elapsed() / SAMPLE_SIZE.cast_into()
-        );
-    }
 
-    #[test]
-    fn test_manager_large_compare_pc() {
-        let size = 1_usize;
-        let b = 32718_usize;
-        let mut manager = OperationManager::new(*SetII, size + 1, 16);
-        manager.add_operation(ArithmeticOp::GT, OperandType::CipherPlain, Some(b));
-        manager.set_execution_plan(vec![Step::new(0, vec![0], size)]);
-        let mut rng = rand::thread_rng();
-        let mut count = 0;
-        let t = Instant::now();
-        for _ in 0..SAMPLE_SIZE {
-            let a: u32 = rng.gen();
-            let a = a % 65536;
-            let true_result: usize = if a > b.cast_into() { 1 } else { 0 };
-            manager.load_data(a.cast_into(), 0);
-            manager.execute();
-            let result = manager.get_data(size);
-
-            println!(
-                "16-bit-CP-GT({}, {}) = {}, which should be {}",
-                a, b, result, true_result
-            );
-            if result == true_result {
-                count = count + 1;
-            }
-        }
-        println!(
-            "accuracy: {:.3?}",
-            count.to_f64().unwrap() / SAMPLE_SIZE.to_f64().unwrap()
+        let ss_key_owned = generate_scheme_switching_key(
+            &glwe_sk,
+            ss_base_log,
+            ss_level,
+            glwe_modular_std_dev,
+            ciphertext_modulus,
+            &mut encryption_generator,
         );
-        println!(
-            "Execution time: {:.3?}",
-            t.elapsed() / SAMPLE_SIZE.cast_into()
-        );
-    }
 
-    #[test]
-    fn test_manager_sign() {
-        let size = 1_usize;
-        let b = 1 << 31;
-        let mut manager = OperationManager::new(*SetII, size + 1, 32);
-        manager.add_operation(ArithmeticOp::SIGN, OperandType::CipherPlain, Some(b));
-        manager.set_execution_plan(vec![Step::new(0, vec![0], size)]);
-        let mut rng = rand::thread_rng();
-        let mut count = 0;
-        let t = Instant::now();
-        for _ in 0..SAMPLE_SIZE {
-            let a: u32 = rng.gen();
-            let b: u32 = b.cast_into();
-            let true_result: usize = if a > b {
-                1
-            } else if a == b {
-                0
-            } else {
-                (1 << 32) - 1
-            };
-            manager.load_data(a.cast_into(), 0);
-            manager.execute();
-            let result = manager.get_data(size);
+        let ss_key = ss_key_owned.as_view();
+        let fourier_bsk = fourier_bsk.as_view();
 
-            println!(
-                " sign({}, {}) = {}, which should be {}",
-                a, b, result, true_result
-            );
+        let mut input = allocate_and_encrypt_new_lwe_ciphertext(
+            &glwe_lwe_sk,
+            Plaintext(1_u64 << (63)),
+            glwe_modular_std_dev,
+            ciphertext_modulus,
+            &mut encryption_generator,
+        );
+        let plain_list = PlaintextList::new(1 << 63, PlaintextCount(polynomial_size.0));
+        let mut zero_list = PlaintextList::new(0, PlaintextCount(polynomial_size.0));
+        let mut glwe = GlweCiphertext::new(0, glwe_size, polynomial_size, ciphertext_modulus);
+        encrypt_glwe_ciphertext(
+            &glwe_sk,
+            &mut glwe,
+            &plain_list,
+            glwe_modular_std_dev,
+            &mut encryption_generator,
+        );
 
-            if result == true_result {
-                count = count + 1;
-            }
-        }
-        println!(
-            "accuracy: {:.3?}",
-            count.to_f64().unwrap() / SAMPLE_SIZE.to_f64().unwrap()
+        let mut out = allocate_and_trivially_encrypt_new_glwe_ciphertext(
+            glwe_size,
+            &zero_list,
+            ciphertext_modulus,
         );
-        println!(
-            "Execution time: {:.3?}",
-            t.elapsed() / SAMPLE_SIZE.cast_into()
+
+        let glwe_view = glwe.as_view();
+
+        let mut ggsw = GgswCiphertext::new(
+            0_u64,
+            glwe_size,
+            polynomial_size,
+            cbs_base_log,
+            cbs_level,
+            ciphertext_modulus,
         );
+
+        let mut fourier_ggsw =
+            FourierGgswCiphertext::new(glwe_size, polynomial_size, cbs_base_log, cbs_level);
+        circuit_bootstrapping_rev_tr_lead_one(
+            &input,
+            &mut ggsw,
+            fourier_bsk,
+            &auto_keys,
+            ss_key,
+            &ksk,
+            param,
+        );
+
+        // let glist = ggsw.as_glwe_list();
+        // for glwe_temp in glist.iter() {
+        //     let mut zero_list = PlaintextList::new(0, PlaintextCount(polynomial_size.0));
+        //     decrypt_glwe_ciphertext(&glwe_sk, &glwe_temp, &mut zero_list);
+        //     let binding = zero_list.as_view();
+        //     let result = binding.get(0).0;
+        //     println!("ggsw result = {:064b}", result);
+        // }
+
+        convert_standard_ggsw_ciphertext_to_fourier(&ggsw, &mut fourier_ggsw);
+        let fourier_ggsw = fourier_ggsw.as_view();
+
+        let fft = Fft::new(polynomial_size);
+        let fft_viwe = fft.as_view();
+        let mut buffer = ComputationBuffers::new();
+        let buffer_size_req =
+            cmux_assign_mem_optimized_requirement::<u64>(glwe_size, polynomial_size, fft_viwe)
+                .unwrap()
+                .unaligned_bytes_required();
+
+        buffer.resize(buffer_size_req);
+        let stuck = buffer.stack();
+
+        add_external_product_assign_lead_one(
+            out.as_mut_view(),
+            fourier_ggsw,
+            glwe_view,
+            fft_viwe,
+            stuck,
+        );
+
+        decrypt_glwe_ciphertext(&glwe_sk, &out, &mut zero_list);
+        let binding = zero_list.as_view();
+        let result = binding.get(0).0;
+        println!("result = {:064b}", result);
+        println!("decoded = {}", (((result >> 62) + 1) >> 1) & 1);
     }
 }

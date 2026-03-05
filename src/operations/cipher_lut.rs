@@ -1,7 +1,6 @@
 use aligned_vec::CACHELINE_ALIGN;
 use dyn_stack::{PodStack, ReborrowMut};
 use itertools::izip;
-use jemalloc_ctl::opt::zero;
 use tfhe::core_crypto::fft_impl::fft64::math::polynomial::FourierPolynomialMutView;
 use tfhe::core_crypto::prelude::polynomial_algorithms::polynomial_wrapping_monic_monomial_div_assign;
 use tfhe::core_crypto::prelude::Polynomial;
@@ -42,6 +41,7 @@ use tfhe::{
     },
 };
 
+use crate::processors::decomposer::LeadOneDecompositionLendingIterLocal;
 use crate::{
     processors::decomposer::TensorSignedDecompositionLendingIterLocal,
     utils::fmadd::update_with_fmadd_local,
@@ -559,8 +559,261 @@ pub fn add_external_product_assign_trivial<Scalar>(
     }
 }
 
+pub fn add_external_product_assign_lead_one<Scalar>(
+    mut out: GlweCiphertextMutView<'_, Scalar>,
+    ggsw: FourierGgswCiphertextView<'_>,
+    glwe: GlweCiphertextView<Scalar>,
+    fft: FftView<'_>,
+    stack: PodStack<'_>,
+) where
+    Scalar: UnsignedTorus,
+{
+    // we check that the polynomial sizes match
+    debug_assert_eq!(ggsw.polynomial_size(), glwe.polynomial_size());
+    debug_assert_eq!(ggsw.polynomial_size(), out.polynomial_size());
+    // we check that the glwe sizes match
+    debug_assert_eq!(ggsw.glwe_size(), glwe.glwe_size());
+    debug_assert_eq!(ggsw.glwe_size(), out.glwe_size());
+
+    let align = CACHELINE_ALIGN;
+    let fourier_poly_size = ggsw.polynomial_size().to_fourier_polynomial_size().0;
+
+    // we round the input mask and body
+    let decomposer = SignedDecomposer::<Scalar>::new(
+        DecompositionBaseLog(
+            (ggsw.decomposition_level_count().0 - 1) * ggsw.decomposition_base_log().0 + 1,
+        ),
+        DecompositionLevelCount(1),
+    );
+
+    let (mut output_fft_buffer, mut substack0) =
+        stack.make_aligned_raw::<c64>(fourier_poly_size * ggsw.glwe_size().0, align);
+    // output_fft_buffer is initially uninitialized, considered to be implicitly zero, to avoid
+    // the cost of filling it up with zeros. `is_output_uninit` is set to `false` once
+    // it has been fully initialized for the first time.
+    let output_fft_buffer = &mut *output_fft_buffer;
+    let mut is_output_uninit = true;
+
+    {
+        // ------------------------------------------------------ EXTERNAL PRODUCT IN FOURIER DOMAIN
+        // In this section, we perform the external product in the fourier domain, and accumulate
+        // the result in the output_fft_buffer variable.
+        let (mut decomposition, mut substack1) = LeadOneDecompositionLendingIterLocal::new(
+            glwe.as_ref()
+                .iter()
+                .map(|s| decomposer.closest_representable(*s)),
+            ggsw.decomposition_base_log(),
+            ggsw.decomposition_level_count(),
+            substack0.rb_mut(),
+        );
+
+        // We loop through the levels (we reverse to match the order of the decomposition iterator.)
+        ggsw.into_levels().rev().for_each(|ggsw_decomp_matrix| {
+            // We retrieve the decomposition of this level.
+            let (glwe_level, glwe_decomp_term, mut substack2) =
+                collect_next_term_lead_one(&mut decomposition, &mut substack1, align);
+            let glwe_decomp_term = GlweCiphertextView::from_container(
+                &*glwe_decomp_term,
+                ggsw.polynomial_size(),
+                out.ciphertext_modulus(),
+            );
+            debug_assert_eq!(ggsw_decomp_matrix.decomposition_level(), glwe_level);
+
+            // For each level we have to add the result of the vector-matrix product between the
+            // decomposition of the glwe, and the ggsw level matrix to the output. To do so, we
+            // iteratively add to the output, the product between every line of the matrix, and
+            // the corresponding (scalar) polynomial in the glwe decomposition:
+            //
+            //                ggsw_mat                        ggsw_mat
+            //   glwe_dec   | - - - - | <        glwe_dec   | - - - - |
+            //  | - - - | x | - - - - |         | - - - | x | - - - - | <
+            //    ^         | - - - - |             ^       | - - - - |
+            //
+            //        t = 1                           t = 2                     ...
+
+            izip!(
+                ggsw_decomp_matrix.into_rows(),
+                glwe_decomp_term.as_polynomial_list().iter()
+            )
+            .for_each(|(ggsw_row, glwe_poly)| {
+                let (mut fourier, substack3) = substack2
+                    .rb_mut()
+                    .make_aligned_raw::<c64>(fourier_poly_size, align);
+                // We perform the forward fft transform for the glwe polynomial
+                let fourier = fft
+                    .forward_as_integer(
+                        FourierPolynomialMutView { data: &mut fourier },
+                        glwe_poly,
+                        substack3,
+                    )
+                    .data;
+                // Now we loop through the polynomials of the output, and add the
+                // corresponding product of polynomials.
+
+                update_with_fmadd_local(
+                    output_fft_buffer,
+                    ggsw_row.data(),
+                    fourier,
+                    is_output_uninit,
+                    fourier_poly_size,
+                );
+
+                // we initialized `output_fft_buffer, so we can set this to false
+                is_output_uninit = false;
+            });
+        });
+    }
+
+    // --------------------------------------------  TRANSFORMATION OF RESULT TO STANDARD DOMAIN
+    // In this section, we bring the result from the fourier domain, back to the standard
+    // domain, and add it to the output.
+    //
+    // We iterate over the polynomials in the output.
+    if !is_output_uninit {
+        izip!(
+            out.as_mut_polynomial_list().iter_mut(),
+            output_fft_buffer
+                .into_chunks(fourier_poly_size)
+                .map(|slice| FourierPolynomialMutView { data: slice }),
+        )
+        .for_each(|(out, fourier)| {
+            // The fourier buffer is not re-used afterwards so we can use the in-place version of
+            // the add_backward_as_torus function
+            fft.add_backward_in_place_as_torus(out, fourier, substack0.rb_mut());
+        });
+    }
+}
+
+pub fn add_external_product_assign_lead_one_trival<Scalar>(
+    mut out: GlweCiphertextMutView<'_, Scalar>,
+    ggsw: FourierGgswCiphertextView<'_>,
+    glwe: GlweCiphertextView<Scalar>,
+    fft: FftView<'_>,
+    stack: PodStack<'_>,
+) where
+    Scalar: UnsignedTorus,
+{
+    // we check that the polynomial sizes match
+    debug_assert_eq!(ggsw.polynomial_size(), glwe.polynomial_size());
+    debug_assert_eq!(ggsw.polynomial_size(), out.polynomial_size());
+    // we check that the glwe sizes match
+    debug_assert_eq!(ggsw.glwe_size(), glwe.glwe_size());
+    debug_assert_eq!(ggsw.glwe_size(), out.glwe_size());
+
+    let align = CACHELINE_ALIGN;
+    let fourier_poly_size = ggsw.polynomial_size().to_fourier_polynomial_size().0;
+
+    // we round the input mask and body
+    let decomposer = SignedDecomposer::<Scalar>::new(
+        DecompositionBaseLog(
+            (ggsw.decomposition_level_count().0 - 1) * ggsw.decomposition_base_log().0 + 1,
+        ),
+        DecompositionLevelCount(1),
+    );
+
+    let (mut output_fft_buffer, mut substack0) =
+        stack.make_aligned_raw::<c64>(fourier_poly_size * ggsw.glwe_size().0, align);
+    // output_fft_buffer is initially uninitialized, considered to be implicitly zero, to avoid
+    // the cost of filling it up with zeros. `is_output_uninit` is set to `false` once
+    // it has been fully initialized for the first time.
+    let output_fft_buffer = &mut *output_fft_buffer;
+    let mut is_output_uninit = true;
+    {
+        // ------------------------------------------------------
+        // EXTERNAL PRODUCT IN FOURIER DOMAIN (BODY ONLY VERSION)
+        // ------------------------------------------------------
+
+        let glwe_size = ggsw.glwe_size().0;
+        let body_index = glwe_size - 1;
+
+        // Decompose ONLY the body polynomial
+        let body = glwe.get_body();
+
+        let (mut decomposition, mut substack1) = LeadOneDecompositionLendingIterLocal::new(
+            body.as_ref()
+                .iter()
+                .map(|s| decomposer.closest_representable(*s)),
+            ggsw.decomposition_base_log(),
+            ggsw.decomposition_level_count(),
+            substack0.rb_mut(),
+        );
+
+        // Loop over decomposition levels (reverse to match iterator order)
+        ggsw.into_levels().rev().for_each(|ggsw_decomp_matrix| {
+            // Get next decomposition term for the BODY only
+            let (glwe_level, body_decomp_term, mut substack2) =
+                collect_next_term_lead_one(&mut decomposition, &mut substack1, align);
+
+            debug_assert_eq!(ggsw_decomp_matrix.decomposition_level(), glwe_level);
+
+            // Get the GGSW row corresponding to the BODY
+            let ggsw_body_row = ggsw_decomp_matrix
+                .into_rows()
+                .nth(body_index)
+                .expect("invalid GGSW body row index");
+
+            // Allocate Fourier buffer for body polynomial
+            let (mut fourier, substack3) = substack2
+                .rb_mut()
+                .make_aligned_raw::<c64>(fourier_poly_size, align);
+
+            // Forward FFT of decomposed body polynomial
+            let fourier = fft
+                .forward_as_integer(
+                    FourierPolynomialMutView { data: &mut fourier },
+                    Polynomial::from_container(&*body_decomp_term),
+                    substack3,
+                )
+                .data;
+
+            // Accumulate external product in Fourier domain
+            update_with_fmadd_local(
+                output_fft_buffer,
+                ggsw_body_row.data(),
+                fourier,
+                is_output_uninit,
+                fourier_poly_size,
+            );
+
+            is_output_uninit = false;
+        });
+    }
+    // --------------------------------------------  TRANSFORMATION OF RESULT TO STANDARD DOMAIN
+    // In this section, we bring the result from the fourier domain, back to the standard
+    // domain, and add it to the output.
+    //
+    // We iterate over the polynomials in the output.
+    if !is_output_uninit {
+        izip!(
+            out.as_mut_polynomial_list().iter_mut(),
+            output_fft_buffer
+                .into_chunks(fourier_poly_size)
+                .map(|slice| FourierPolynomialMutView { data: slice }),
+        )
+        .for_each(|(out, fourier)| {
+            // The fourier buffer is not re-used afterwards so we can use the in-place version of
+            // the add_backward_as_torus function
+            fft.add_backward_in_place_as_torus(out, fourier, substack0.rb_mut());
+        });
+    }
+}
+
 fn collect_next_term<'a, Scalar: UnsignedTorus>(
     decomposition: &mut TensorSignedDecompositionLendingIterLocal<'_, Scalar>,
+    substack1: &'a mut PodStack,
+    align: usize,
+) -> (
+    DecompositionLevel,
+    dyn_stack::DynArray<'a, Scalar>,
+    PodStack<'a>,
+) {
+    let (glwe_level, _, glwe_decomp_term) = decomposition.next_term().unwrap();
+    let (glwe_decomp_term, substack2) = substack1.rb_mut().collect_aligned(align, glwe_decomp_term);
+    (glwe_level, glwe_decomp_term, substack2)
+}
+
+fn collect_next_term_lead_one<'a, Scalar: UnsignedTorus>(
+    decomposition: &mut LeadOneDecompositionLendingIterLocal<'_, Scalar>,
     substack1: &'a mut PodStack,
     align: usize,
 ) -> (
