@@ -34,7 +34,7 @@ impl PlainTrivium {
         state[286] = 1;
         state[287] = 1;
 
-        let mut trivium = Self { state };
+        let trivium = Self { state };
 
         // warmup 1152 rounds
         // for _ in 0..1152 {
@@ -45,6 +45,14 @@ impl PlainTrivium {
     }
 
     fn vec_u64_to_bits(v: &Vec<u64>, bit_len: usize) -> Vec<u8> {
+        if v.len() >= bit_len && v.iter().all(|&word| word <= 1) {
+            return v
+                .iter()
+                .take(bit_len)
+                .map(|&bit| bit as u8)
+                .collect::<Vec<u8>>();
+        }
+
         let mut bits = Vec::with_capacity(bit_len);
 
         for &word in v {
@@ -101,6 +109,6 @@ impl PlainTrivium {
         for i in 0..64 {
             x |= (self.gen_bit() as u64) << i;
         }
-        x
+        x.reverse_bits()
     }
 }

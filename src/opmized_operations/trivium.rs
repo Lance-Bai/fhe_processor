@@ -431,7 +431,7 @@ where
             );
             let stack = self.buffer.stack();
             add_external_product_assign_lead_one(
-                t1.as_mut_view(),
+                t2.as_mut_view(),
                 self.fourier_ggsw_buffer.as_view(),
                 s176.glwe_view(),
                 fft_view,
@@ -444,7 +444,7 @@ where
             );
             let stack = self.buffer.stack();
             add_external_product_assign_lead_one(
-                t1.as_mut_view(),
+                t2.as_mut_view(),
                 self.fourier_ggsw_buffer.as_view(),
                 s175.glwe_view(),
                 fft_view,
@@ -463,7 +463,7 @@ where
             );
             let stack = self.buffer.stack();
             add_external_product_assign_lead_one(
-                t1.as_mut_view(),
+                t3.as_mut_view(),
                 self.fourier_ggsw_buffer.as_view(),
                 s287.glwe_view(),
                 fft_view,
@@ -476,7 +476,7 @@ where
             );
             let stack = self.buffer.stack();
             add_external_product_assign_lead_one(
-                t1.as_mut_view(),
+                t3.as_mut_view(),
                 self.fourier_ggsw_buffer.as_view(),
                 s286.glwe_view(),
                 fft_view,
@@ -512,6 +512,9 @@ where
             self.state[write_a_idx].cbs_glwe_to_ggsw(fourier_bsk, auto_keys, ss_key, ksk, parms);
             self.state[write_b_idx].cbs_glwe_to_ggsw(fourier_bsk, auto_keys, ss_key, ksk, parms);
             self.state[write_c_idx].cbs_glwe_to_ggsw(fourier_bsk, auto_keys, ss_key, ksk, parms);
+            self.state[write_a_idx].extract_glwe_from_ggsw();
+            self.state[write_b_idx].extract_glwe_from_ggsw();
+            self.state[write_c_idx].extract_glwe_from_ggsw();
             self.state[write_a_idx].set_data_type_ggsw();
             self.state[write_b_idx].set_data_type_ggsw();
             self.state[write_c_idx].set_data_type_ggsw();
@@ -527,14 +530,21 @@ where
         ss_key: FourierGgswCiphertextListView,
         ksk: &LweStoredReusedKeyswitchKey<Vec<Scalar>>,
         parms: &ProcessorParam<Scalar>,
-    ) -> Vec<LweCiphertextOwned<Scalar>>
-
-    {
+    ) -> Vec<LweCiphertextOwned<Scalar>> {
         let mut result = vec![self.large_lwe_buffer.clone(); num_steps];
         for i in 0..num_steps {
             let output = self.get_output_bit();
             extract_lwe_sample_from_glwe_ciphertext(&output, &mut result[i], MonomialDegree(0));
-            self.next_state(true, fourier_bsk, auto_keys, ss_key, ksk, parms);
+            let step = self.index;
+            // println!("step {step}, {}", step % 447);
+            if (step % 727 > 616) {
+                self.next_state(true, fourier_bsk, auto_keys, ss_key, ksk, parms);
+            } else if step % 2 == 0 {
+                self.next_state(true, fourier_bsk, auto_keys, ss_key, ksk, parms);
+            } else {
+                self.next_state(false, fourier_bsk, auto_keys, ss_key, ksk, parms);
+            }
+            // self.next_state(true, fourier_bsk, auto_keys, ss_key, ksk, parms);
         }
 
         result
