@@ -1,0 +1,8 @@
+services:
+  fhe-processor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fhe-processor:latest
+    container_name: fhe-processor
+    restart: "no"

@@ -1,0 +1,7 @@
+target/
+.git/
+.gitignore
+.vscode/
+**/*.rs.bk
+**/*.log
+related_work/**/target/
