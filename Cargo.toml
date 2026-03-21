@@ -46,3 +46,7 @@ harness = false
 [[bench]]
 name = "all_op_bench"   
 harness = false 
+
+[[bench]]
+name = "lut_batch_bench"
+harness = false

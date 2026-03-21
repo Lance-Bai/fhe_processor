@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 use std::env;
-use std::fs::{create_dir_all, OpenOptions};
-use std::io::{BufWriter, Write};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use aligned_vec::ABox;
 use concrete_fft::c64;
@@ -17,9 +14,8 @@ use fhe_processor::processors::key_gen::allocate_and_generate_new_reused_lwe_key
 use fhe_processor::processors::lwe_stored_ksk::{
     allocate_and_generate_new_stored_reused_lwe_keyswitch_key, LweStoredReusedKeyswitchKey,
 };
-use fhe_processor::utils::instance::SetIII;
-use fhe_processor::{utils::instance::SetI, utils::parms::ProcessorParam};
-use indicatif::{ProgressBar, ProgressStyle};
+use fhe_processor::utils::instance::SetI;
+use fhe_processor::utils::parms::ProcessorParam;
 use rayon::iter::{
     IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator,
 };
@@ -43,6 +39,8 @@ use tfhe::core_crypto::{
 };
 
 const SAMPLE_SIZE: usize = 10;
+const N_BITS_VALS: [usize; 2] = [4, 8];
+const MESSAGE_COUNTS: [usize; 2] = [1, 64];
 
 struct BenchCtx {
     fourier_bsk: FourierLweBootstrapKeyOwned,
@@ -134,7 +132,7 @@ fn setup_ctx(param: ProcessorParam<u64>) -> BenchCtx {
     );
     BenchCtx {
         fourier_bsk,
-        auto_keys: auto_keys,
+        auto_keys,
         ss_key,
         glwe_sk,
         ksk,
@@ -159,7 +157,7 @@ fn run_cbs_part(ctx: &BenchCtx, prep: &mut IterSetup) {
         .for_each(|(i, ggsw)| {
             let lwe = &prep.lwes[i];
             circuit_bootstrapping_4_bits_at_once_rev_tr(
-                &lwe,
+                lwe,
                 ggsw,
                 fourier_bsk_view,
                 auto_keys,
@@ -179,6 +177,7 @@ fn run_lut_part(ctx: &BenchCtx, prep: &mut IterSetup, n_bits: usize) {
     let lut_size = 1_usize << n_bits;
     let binding = Fft::new(ctx.params.polynomial_size());
     let fft_view = binding.as_view();
+
     prep.lut
         .par_iter()
         .zip(prep.lwe_outs.par_chunks_mut(group_size))
@@ -214,7 +213,7 @@ struct IterSetup {
     fourier_ggsw_lists: Vec<FourierGgswCiphertextList<Vec<c64>>>,
     lwe_outs: Vec<LweCiphertext<Vec<u64>>>,
     lut: Vec<PolynomialList<Vec<u64>>>,
-    pack_size: usize, // one poly contains how many lut
+    pack_size: usize,
 }
 
 fn make_iter_setup(ctx: &BenchCtx, n_bits: usize) -> IterSetup {
@@ -239,7 +238,7 @@ fn make_iter_setup(ctx: &BenchCtx, n_bits: usize) -> IterSetup {
             })
             .collect()
     };
-    // a trival lut, just ues it size
+
     let plain_lut = vec![0usize; 1 << n_bits];
     let split_plain_lut =
         split_adjusted_lut_by_chunk(&plain_lut, n_bits, ctx.params.extract_size());
@@ -289,99 +288,70 @@ fn make_iter_setup(ctx: &BenchCtx, n_bits: usize) -> IterSetup {
     }
 }
 
-fn bench_lut_sizes(c: &mut Criterion) {
+fn cbs_threads_per_message(n_bits: usize) -> usize {
+    n_bits.max(1)
+}
+
+fn lut_threads_per_message(n_bits: usize) -> usize {
+    (n_bits / 4).max(1)
+}
+
+fn choose_threads_for_case(n_bits: usize, message_count: usize, max_threads: usize) -> usize {
+    let per_message_peak = cbs_threads_per_message(n_bits).max(lut_threads_per_message(n_bits));
+    message_count
+        .saturating_mul(per_message_peak)
+        .clamp(1, max_threads.max(1))
+}
+
+fn bench_lut_batch(c: &mut Criterion) {
     let ctx = setup_ctx(*SetI);
-    let n_vals = [4];
-    let thread_vals = [1];
 
-    // ---------------- CSV ----------------
-    let target_dir = env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".into());
-    let logs_dir = format!("{}/bench_logs", target_dir);
-    let _ = create_dir_all(&logs_dir);
-    let ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    let log_path = format!("{}/lut_time_{}.csv", logs_dir, ts);
-    let file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log_path)
-        .unwrap();
-    let writer = Arc::new(Mutex::new(BufWriter::new(file)));
+    let hw_threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    let max_threads = env::var("LUT_BATCH_MAX_THREADS")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .map(|v| v.max(1).min(hw_threads))
+        .unwrap_or(hw_threads);
 
-    {
-        let mut w = writer.lock().unwrap();
-        let _ = writeln!(w, "n_bits,threads,avg_cbs_ms,avg_lut_ms,avg_total_ms,iters");
-        let _ = w.flush();
-    }
+    let mut group = c.benchmark_group("lut_batch_total_time");
 
-    // ---------------- bar ----------------
-    let total_cases = (n_vals.len() * thread_vals.len()) as u64;
-    let pb = Arc::new(ProgressBar::new(total_cases));
-    pb.set_style(
-        ProgressStyle::with_template(
-            "[{elapsed_precise}] [{bar:40}] {pos}/{len} {msg} (eta {eta})",
-        )
-        .unwrap()
-        .progress_chars("=>-"),
-    );
-
-    let mut group = c.benchmark_group("lut_n_to_n_combo");
-
-    for &n_bits in &n_vals {
-        for &threads in &thread_vals {
-            let writer = writer.clone();
+    for &n_bits in &N_BITS_VALS {
+        for &message_count in &MESSAGE_COUNTS {
+            let threads = choose_threads_for_case(n_bits, message_count, max_threads);
+            let cbs_per_msg = cbs_threads_per_message(n_bits);
+            let lut_per_msg = lut_threads_per_message(n_bits);
 
             group.bench_with_input(
-                BenchmarkId::new(format!("combo_t{}", threads), n_bits),
-                &n_bits,
-                |b, &nb| {
-                    b.iter_custom(|iters| {
-                        let pool = ThreadPoolBuilder::new()
-                            .num_threads(threads)
-                            .build()
-                            .unwrap();
+                BenchmarkId::new(
+                    format!(
+                        "m{}_pool{}_cbs{}_lut{}",
+                        message_count, threads, cbs_per_msg, lut_per_msg
+                    ),
+                    format!("n{}", n_bits),
+                ),
+                &(n_bits, message_count),
+                |b, &(nb, mc)| {
+                    let pool = ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
 
+                    b.iter_custom(|iters| {
                         let mut sum_total = Duration::ZERO;
-                        let mut sum_cbs = Duration::ZERO;
-                        let mut sum_lut = Duration::ZERO;
 
                         for _ in 0..iters {
-                            let mut prep = make_iter_setup(&ctx, nb);
+                            let mut batch: Vec<IterSetup> =
+                                (0..mc).map(|_| make_iter_setup(&ctx, nb)).collect();
 
                             let t0 = Instant::now();
                             pool.install(|| {
-                                run_cbs_part(&ctx, &mut prep);
+                                batch.par_iter_mut().for_each(|prep| run_cbs_part(&ctx, prep));
+                                batch
+                                    .par_iter_mut()
+                                    .for_each(|prep| run_lut_part(&ctx, prep, nb));
                             });
-                            let dt_cbs = t0.elapsed();
+                            sum_total += t0.elapsed();
 
-                            let t1 = Instant::now();
-                            pool.install(|| {
-                                run_lut_part(&ctx, &mut prep, nb);
-                            });
-                            let dt_lut = t1.elapsed();
-
-                            sum_cbs += dt_cbs;
-                            sum_lut += dt_lut;
-                            sum_total += dt_cbs + dt_lut;
-
-                            black_box(&prep);
-                        }
-
-                        let iters_f = iters as f64;
-                        let avg_cbs_ms = (sum_cbs.as_secs_f64() * 1e3) / iters_f;
-                        let avg_lut_ms = (sum_lut.as_secs_f64() * 1e3) / iters_f;
-                        let avg_total_ms = (sum_total.as_secs_f64() * 1e3) / iters_f;
-
-                        {
-                            let mut w = writer.lock().unwrap();
-                            let _ = writeln!(
-                                w,
-                                "{},{},{:.6},{:.6},{:.6},{}",
-                                nb, threads, avg_cbs_ms, avg_lut_ms, avg_total_ms, iters
-                            );
-                            let _ = w.flush();
+                            black_box(&batch);
                         }
 
                         sum_total
@@ -389,13 +359,10 @@ fn bench_lut_sizes(c: &mut Criterion) {
                 },
             );
 
-            pb.set_message(format!("n_bits={n_bits} threads={threads}"));
-            pb.inc(1);
         }
     }
 
     group.finish();
-    pb.finish_with_message(format!("done. log: {}", log_path));
 }
 
 fn small_runs() -> Criterion {
@@ -405,9 +372,10 @@ fn small_runs() -> Criterion {
         .measurement_time(Duration::from_secs(10))
         .configure_from_args()
 }
+
 criterion_group! {
     name = benches;
     config = small_runs();
-    targets = bench_lut_sizes
+    targets = bench_lut_batch
 }
 criterion_main!(benches);
